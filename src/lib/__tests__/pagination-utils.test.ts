@@ -1,15 +1,5 @@
 import { fetchAllPaginated, fetchAllPaginatedWithOrder, SupabaseQueryInterface } from '../utils';
 
-function createQueryForFetchAll(
-  pages: Array<{ data: number[] | null; error: Error | null }>,
-): SupabaseQueryInterface {
-  let call = 0;
-  return {
-    range: jest.fn().mockReturnThis(),
-    order: jest.fn(() => pages[call++] || { data: null, error: null }),
-  } as unknown as SupabaseQueryInterface;
-}
-
 function createQueryForFetchAllWithOrder(
   pages: Array<{ data: number[] | null; error: Error | null }>,
 ): SupabaseQueryInterface {
@@ -22,7 +12,7 @@ function createQueryForFetchAllWithOrder(
 
 describe('fetchAllPaginated', () => {
   it('複数ページをまとめて取得できる', async () => {
-    const query = createQueryForFetchAll([
+    const query = createQueryForFetchAllWithOrder([
       { data: [1, 2], error: null },
       { data: [3], error: null },
     ]);
@@ -33,7 +23,7 @@ describe('fetchAllPaginated', () => {
   });
 
   it('エラー時は例外を投げる', async () => {
-    const query = createQueryForFetchAll([{ data: null, error: new Error('NG') }]);
+    const query = createQueryForFetchAllWithOrder([{ data: null, error: new Error('NG') }]);
     await expect(fetchAllPaginated<number>(query, 2)).rejects.toThrow('NG');
   });
 });
