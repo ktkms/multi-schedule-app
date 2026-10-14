@@ -79,6 +79,14 @@ const dateKey = (date: Date) => `${date.getFullYear()}-${date.getMonth()}-${date
 const timeLabel = (date: Date) =>
   `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 
+/** 翌日ちょうど0時の終了だけを、開始日の24時として扱う。 */
+const endsAtNextMidnight = (start: Date, end: Date) => {
+  const nextMidnight = new Date(start);
+  nextMidnight.setDate(nextMidnight.getDate() + 1);
+  nextMidnight.setHours(0, 0, 0, 0);
+  return nextMidnight.getTime() === end.getTime();
+};
+
 /** 指定条件で抽出した連続候補を、DaySynthの壁時計時刻で共有本文へ整形する。 */
 export function buildAvailableDatesMessage(
   dates: ShareEventDate[],
@@ -89,18 +97,27 @@ export function buildAvailableDatesMessage(
   if (!Number.isInteger(minCount) || minCount < 1) return '';
   const ranges = findAvailableDateRanges(dates, availabilities, minCount, options);
   const durationLabel = options.durationMinutes ? `・連続${options.durationMinutes}分以上` : '';
-  const heading = `[${minCount}人以上が全時間に参加可能な日程${durationLabel}]`;
+  const heading = `[${minCount}人以上の共通日程${durationLabel}]`;
   if (!ranges.length) return `${heading}\n該当する日程がありません`;
 
   const grouped = new Map<string, { date: Date; labels: string[] }>();
   const includeYear =
-    new Set(ranges.flatMap(({ start, end }) => [start.getFullYear(), end.getFullYear()])).size > 1;
+    new Set(
+      ranges.flatMap(({ start, end }) =>
+        endsAtNextMidnight(start, end)
+          ? [start.getFullYear()]
+          : [start.getFullYear(), end.getFullYear()],
+      ),
+    ).size > 1;
   const dayLabel = (date: Date) =>
     `${includeYear ? `${date.getFullYear()}年` : ''}${date.getMonth() + 1}月${date.getDate()}日`;
   for (const { start, end } of ranges) {
     const group = grouped.get(dateKey(start)) ?? { date: start, labels: [] };
-    const endLabel =
-      dateKey(start) === dateKey(end) ? timeLabel(end) : `${dayLabel(end)} ${timeLabel(end)}`;
+    const endLabel = endsAtNextMidnight(start, end)
+      ? '24:00'
+      : dateKey(start) === dateKey(end)
+        ? timeLabel(end)
+        : `${dayLabel(end)} ${timeLabel(end)}`;
     group.labels.push(`${timeLabel(start)}-${endLabel}`);
     grouped.set(dateKey(start), group);
   }

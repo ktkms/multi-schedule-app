@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import ShareAvailableDatesButton from '../share-available-dates-button';
 
 jest.mock('@/components/analytics/google-analytics', () => ({ trackEvent: jest.fn() }));
@@ -25,74 +25,92 @@ const props = {
 };
 const originalShare = navigator.share;
 const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
-
 afterEach(() => {
   navigator.share = originalShare;
   if (originalClipboard) Object.defineProperty(navigator, 'clipboard', originalClipboard);
   else Reflect.deleteProperty(navigator, 'clipboard');
 });
 
-it('共有前に本文を確認し、プレビューと同じ本文をコピーする', async () => {
-  const share = jest.fn();
-  navigator.share = share;
-  const writeText = jest.fn().mockResolvedValue(undefined);
-  Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+const openPreview = (count = '2') => {
+  fireEvent.change(screen.getByLabelText('最低参加人数'), { target: { value: count } });
+  fireEvent.click(screen.getByRole('button', { name: '共通日程を共有' }));
+  return within(screen.getByRole('dialog', { name: '共有内容を確認' }));
+};
+
+it('通常表示を簡潔にし、共有内容からポップアップを開く', () => {
   render(<ShareAvailableDatesButton {...props} />);
-  expect(screen.queryByLabelText('共有する本文')).not.toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText('最低参加人数'), { target: { value: '2' } });
-  fireEvent.click(screen.getByRole('button', { name: '共有内容を確認' }));
-  const preview = screen.getByLabelText<HTMLTextAreaElement>('共有する本文');
-  expect(preview.value).toContain('10:00-11:00, 11:00-12:00');
-  expect(share).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: '共通日程の本文をコピー' }));
-  await waitFor(() => expect(writeText).toHaveBeenCalledWith(preview.value));
-  expect(share).not.toHaveBeenCalled();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('連続時間')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /コピー/ })).not.toBeInTheDocument();
+  const dialog = openPreview();
+  expect(dialog.getByRole('document').textContent).toContain('10:00-11:00, 11:00-12:00');
+  expect(dialog.queryByRole('button', { name: /コピー/ })).not.toBeInTheDocument();
 });
 
-it('Web Shareへプレビューの本文とURLを渡す', async () => {
+it('ポップアップ内から、確認した本文とURLをWeb Shareへ渡す', async () => {
   const share = jest.fn().mockResolvedValue(undefined);
   navigator.share = share;
   render(<ShareAvailableDatesButton {...props} />);
-  fireEvent.change(screen.getByLabelText('最低参加人数'), { target: { value: '1' } });
-  fireEvent.click(screen.getByRole('button', { name: '共有内容を確認' }));
-  const preview = screen.getByLabelText<HTMLTextAreaElement>('共有する本文').value;
-  fireEvent.click(screen.getByRole('button', { name: '共通日程を共有' }));
+  const dialog = openPreview('1');
+  const preview = dialog.getByRole('document').textContent;
+  expect(share).not.toHaveBeenCalled();
+  fireEvent.click(dialog.getByRole('button', { name: '共有する' }));
   await waitFor(() => expect(share).toHaveBeenCalled());
   const { text, url } = share.mock.calls[0][0];
   expect(`${text}\n${url}`).toBe(preview);
 });
 
-it('条件変更で本文を更新し、候補なしから復帰できる', () => {
+it('端末共有が非対応の場合は同じ共有操作で本文とURLをコピーする', async () => {
+  Object.defineProperty(navigator, 'share', {
+    value: undefined,
+    configurable: true,
+    writable: true,
+  });
+  const writeText = jest.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
   render(<ShareAvailableDatesButton {...props} />);
-  fireEvent.change(screen.getByLabelText('最低参加人数'), { target: { value: '2' } });
-  fireEvent.click(screen.getByRole('button', { name: '共有内容を確認' }));
-  fireEvent.change(screen.getByLabelText('必要な連続時間'), { target: { value: '120' } });
-  expect(screen.getByRole('status')).toHaveTextContent('条件に合う日程がありません');
-  expect(screen.getByRole('button', { name: '共通日程を共有' })).toBeDisabled();
-  expect(screen.getByRole('button', { name: '共通日程の本文をコピー' })).toBeDisabled();
-  fireEvent.change(screen.getByLabelText('最低参加人数'), { target: { value: '1' } });
-  fireEvent.click(screen.getByLabelText('A'));
-  expect(screen.getByRole('status')).toBeInTheDocument();
-  fireEvent.click(screen.getByLabelText('A'));
-  fireEvent.click(screen.getByLabelText('B'));
-  expect(screen.queryByRole('status')).not.toBeInTheDocument();
-  expect(screen.getByLabelText<HTMLTextAreaElement>('共有する本文').value).toContain(
-    '必須参加者: B',
-  );
-  expect(screen.getByRole('button', { name: '共通日程を共有' })).toBeEnabled();
+  const dialog = openPreview();
+  const preview = dialog.getByRole('document').textContent;
+  fireEvent.click(dialog.getByRole('button', { name: '共有する' }));
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith(preview));
+});
+
+it('ポップアップ内の条件変更で本文を更新し、候補なしから復帰できる', () => {
+  render(<ShareAvailableDatesButton {...props} />);
+  const dialog = openPreview();
+  fireEvent.change(dialog.getByLabelText('連続時間'), { target: { value: '120' } });
+  expect(dialog.getByRole('status')).toHaveTextContent('条件に合う日程がありません');
+  expect(dialog.getByRole('button', { name: '共有する' })).toBeDisabled();
+  fireEvent.change(dialog.getByLabelText('参加人数'), { target: { value: '1' } });
+  fireEvent.click(dialog.getByLabelText('A'));
+  expect(dialog.getByRole('status')).toBeInTheDocument();
+  fireEvent.click(dialog.getByLabelText('A'));
+  fireEvent.click(dialog.getByLabelText('B'));
+  expect(dialog.queryByRole('status')).not.toBeInTheDocument();
+  expect(dialog.getByRole('document').textContent).toContain('必須参加者: B');
+  expect(dialog.getByRole('button', { name: '共有する' })).toBeEnabled();
+  fireEvent.change(dialog.getByLabelText('参加人数'), { target: { value: '0' } });
+  expect(dialog.getByRole('alert')).toBeInTheDocument();
+  expect(dialog.getByRole('button', { name: '共有する' })).toBeDisabled();
 });
 
 it.each(['', '0', '4', '1.5'])('人数の不正入力 %s ではプレビューを開始できない', (value) => {
   render(<ShareAvailableDatesButton {...props} />);
   fireEvent.change(screen.getByLabelText('最低参加人数'), { target: { value } });
   expect(screen.getByRole('alert')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: '共有内容を確認' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: '共通日程を共有' })).toBeDisabled();
 });
 
-it('プレビューを閉じて条件設定に戻れる', () => {
+it('閉じる・Escapeでポップアップを閉じ、元のボタンへフォーカスを戻す', () => {
   render(<ShareAvailableDatesButton {...props} />);
-  fireEvent.click(screen.getByRole('button', { name: '共有内容を確認' }));
-  fireEvent.click(screen.getByRole('button', { name: 'プレビューを閉じる' }));
-  expect(screen.queryByLabelText('共有する本文')).not.toBeInTheDocument();
-  expect(screen.getByRole('button', { name: '共有内容を確認' })).toBeInTheDocument();
+  const trigger = screen.getByRole('button', { name: '共通日程を共有' });
+  trigger.focus();
+  const dialog = openPreview();
+  fireEvent.click(dialog.getByRole('button', { name: '閉じる' }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
+  fireEvent.click(trigger);
+  fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
 });

@@ -22,19 +22,19 @@ describe('buildAvailableDatesMessage', () => {
 
   it('参加人数2人、閾値2で1件のみ返す', () => {
     expect(buildAvailableDatesMessage(dates, availabilities, 2)).toBe(
-      '[2人以上が全時間に参加可能な日程]\n- 5月1日 10:00-11:00',
+      '[2人以上の共通日程]\n- 5月1日 10:00-11:00',
     );
   });
 
   it('閾値1なら2件返す', () => {
     expect(buildAvailableDatesMessage(dates, availabilities, 1)).toBe(
-      '[1人以上が全時間に参加可能な日程]\n- 5月1日 10:00-11:00\n- 5月2日 12:00-13:00',
+      '[1人以上の共通日程]\n- 5月1日 10:00-11:00\n- 5月2日 12:00-13:00',
     );
   });
 
   it('該当なしの場合は該当なしメッセージを返す', () => {
     expect(buildAvailableDatesMessage(dates, availabilities, 3)).toBe(
-      '[3人以上が全時間に参加可能な日程]\n該当する日程がありません',
+      '[3人以上の共通日程]\n該当する日程がありません',
     );
   });
 
@@ -63,7 +63,7 @@ describe('buildAvailableDatesMessage', () => {
       { participant_id: 'p2', event_date_id: 'd2', availability: true },
     ];
     expect(buildAvailableDatesMessage(multiDates, multiAvailabilities, 2)).toBe(
-      '[2人以上が全時間に参加可能な日程]\n- 5月1日 10:00-12:00',
+      '[2人以上の共通日程]\n- 5月1日 10:00-12:00',
     );
   });
 
@@ -87,7 +87,7 @@ describe('buildAvailableDatesMessage', () => {
       { participant_id: 'p2', event_date_id: 'd2', availability: true },
     ];
     expect(buildAvailableDatesMessage(gapDates, gapAvailabilities, 2)).toBe(
-      '[2人以上が全時間に参加可能な日程]\n- 5月1日 10:00-11:00, 12:00-13:00',
+      '[2人以上の共通日程]\n- 5月1日 10:00-11:00, 12:00-13:00',
     );
   });
 });
@@ -232,7 +232,30 @@ describe('連続候補の共有条件', () => {
     ];
     expect(
       buildAvailableDatesMessage(overnight, answers([['a']]), 1, { durationMinutes: 120 }),
-    ).toBe('[1人以上が全時間に参加可能な日程・連続120分以上]\n- 10月20日 23:00-10月21日 01:00');
+    ).toBe('[1人以上の共通日程・連続120分以上]\n- 10月20日 23:00-10月21日 01:00');
+  });
+
+  it.each([
+    ['2026-10-20T23:00:00Z', '2026-10-21T00:00:00Z', '10月20日 23:00-24:00'],
+    ['2026-12-31T23:00:00Z', '2027-01-01T00:00:00Z', '12月31日 23:00-24:00'],
+    ['2028-02-29T23:00:00Z', '2028-03-01T00:00:00Z', '2月29日 23:00-24:00'],
+  ])('翌日0時の終了を24:00と表記する（%s）', (start_time, end_time, expected) => {
+    const message = buildAvailableDatesMessage(
+      [{ id: 'd0', start_time, end_time }],
+      answers([['a']]),
+      1,
+    );
+    expect(message).toContain(expected);
+    expect(message).not.toContain('00:00');
+  });
+
+  it('2日後の0時は24:00に省略しない', () => {
+    const message = buildAvailableDatesMessage(
+      [{ id: 'd0', start_time: '2026-10-20T23:00:00', end_time: '2026-10-22T00:00:00' }],
+      answers([['a']]),
+      1,
+    );
+    expect(message).toContain('10月20日 23:00-10月22日 00:00');
   });
 
   it('別年の同じ月日を一つにまとめない', () => {

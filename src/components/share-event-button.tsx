@@ -19,9 +19,9 @@ interface ShareEventButtonProps {
   includeTextInClipboard?: boolean;
   /** GA4 に送る共有対象の分類（デフォルト: 通常のイベント共有） */
   contentType?: ShareContentType;
-  /** Web Share対応端末でも本文をクリップボードへコピーする。 */
-  preferClipboard?: boolean;
   disabled?: boolean;
+  /** 確認画面の主要操作には既存のprimaryボタンを使う。 */
+  variant?: 'outline' | 'primary';
 }
 
 export default function ShareEventButton({
@@ -33,8 +33,8 @@ export default function ShareEventButton({
   ariaLabel = 'イベントURLを共有',
   includeTextInClipboard = false,
   contentType = 'event',
-  preferClipboard = false,
   disabled = false,
+  variant = 'outline',
 }: ShareEventButtonProps) {
   const [isSharing, setIsSharing] = useState(false);
 
@@ -43,7 +43,7 @@ export default function ShareEventButton({
     setIsSharing(true);
     try {
       let method: ShareMethod;
-      if (navigator.share && !preferClipboard) {
+      if (navigator.share) {
         await navigator.share({
           url,
           title: title || siteConfig.share.defaultTitle,
@@ -95,7 +95,7 @@ export default function ShareEventButton({
   return (
     <button
       type="button"
-      className={`btn btn-outline btn-sm flex items-center gap-2 ${className}`}
+      className={`btn ${variant === 'primary' ? 'btn-primary' : 'btn-outline btn-sm'} flex items-center gap-2 ${className}`}
       onClick={handleShare}
       disabled={isSharing || disabled}
       aria-label={ariaLabel}

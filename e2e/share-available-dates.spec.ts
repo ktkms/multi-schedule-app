@@ -26,6 +26,14 @@ function localDatabase() {
 async function capture(page: Page, name: string) {
   if (!screenshotDir) return;
   await mkdir(screenshotDir, { recursive: true });
+  const dialog = page.getByRole('dialog', { name: '共有内容を確認' });
+  if (await dialog.isVisible()) {
+    await page.screenshot({
+      path: path.join(screenshotDir, `${name}.png`),
+      animations: 'disabled',
+    });
+    return;
+  }
   const section = page.getByTestId('available-dates-share').filter({ visible: true });
   await section.scrollIntoViewIfNeeded();
   await section.evaluate((element) =>
@@ -34,7 +42,10 @@ async function capture(page: Page, name: string) {
       behavior: 'instant',
     }),
   );
-  await section.screenshot({ path: path.join(screenshotDir, `${name}.png`) });
+  await section.screenshot({
+    path: path.join(screenshotDir, `${name}.png`),
+    animations: 'disabled',
+  });
 }
 
 test.describe('共通日程の共有', () => {
@@ -113,39 +124,45 @@ test.describe('共通日程の共有', () => {
     await capture(page, 'desktop-light-conditions');
     await share.getByTestId('share-min-count').fill('2');
     await share.getByTestId('share-preview-open').click();
-    const preview = share.getByTestId('share-preview-text');
-    await expect(preview).toHaveValue(/10:00-11:00, 11:00-12:00/);
+    const dialog = page.getByRole('dialog', { name: '共有内容を確認' });
+    await expect(dialog).toBeVisible();
+    const preview = dialog.getByTestId('share-preview-text');
+    await expect(preview).toContainText('10:00-11:00, 11:00-12:00');
     await capture(page, 'desktop-light-preview');
-    await share.getByRole('button', { name: '共通日程の本文をコピー' }).click();
-    expect(await page.evaluate(() => window._copiedText)).toBe(await preview.inputValue());
-    await share.getByRole('button', { name: '共通日程を共有' }).click();
+    await expect(dialog.getByRole('button', { name: /コピー/ })).toHaveCount(0);
+    await dialog.getByRole('button', { name: '共有する' }).click();
     const payload = await page.evaluate(
       () => (window as Window & { sharePayload?: ShareData }).sharePayload,
     );
-    expect(`${payload?.text}\n${payload?.url}`).toBe(await preview.inputValue());
+    expect(`${payload?.text}\n${payload?.url}`).toBe(await preview.textContent());
+    await page.evaluate(() =>
+      Object.defineProperty(navigator, 'share', { configurable: true, value: undefined }),
+    );
+    await dialog.getByRole('button', { name: '共有する' }).click();
+    expect(await page.evaluate(() => window._copiedText)).toBe(await preview.textContent());
     await expect(page.getByText('本文とURLをコピーしました')).not.toBeVisible({ timeout: 6000 });
     await expect(page.getByText('リンクを共有しました')).not.toBeVisible({ timeout: 6000 });
-    await share.getByTestId('share-duration').selectOption('120');
-    await expect(share.getByRole('status')).toHaveText(
+    await dialog.locator('summary').click();
+    await dialog.getByTestId('share-duration').selectOption('120');
+    await expect(dialog.getByRole('status')).toHaveText(
       '条件に合う日程がありません。条件を変更してください。',
     );
-    await expect(share.getByRole('button', { name: '共通日程を共有' })).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: '共有する' })).toBeDisabled();
     await capture(page, 'desktop-light-empty');
-    await share.getByTestId('share-min-count').fill('1');
-    await share.locator('summary').click();
-    await share.getByTestId(`share-required-${participantIds[1]}`).check();
-    await expect(preview).toHaveValue(/必須参加者: ゆう/);
-    await expect(preview).toHaveValue(/10:00-12:00/);
+    await dialog.getByTestId('share-modal-count').fill('1');
+    await dialog.getByTestId(`share-required-${participantIds[1]}`).check();
+    await expect(preview).toContainText('必須参加者: ゆう');
+    await expect(preview).toContainText('10:00-12:00');
     await capture(page, 'desktop-light-required');
-    await share.getByTestId(`share-required-${participantIds[0]}`).check();
-    await expect(share.getByRole('status')).toBeVisible();
+    await dialog.getByTestId(`share-required-${participantIds[0]}`).check();
+    await expect(dialog.getByRole('status')).toBeVisible();
     await capture(page, 'desktop-light-required-empty');
-    await share.getByTestId(`share-required-${participantIds[0]}`).uncheck();
-    await share.getByTestId('share-min-count').fill('0');
-    await expect(share.getByRole('alert')).toBeVisible();
+    await dialog.getByTestId(`share-required-${participantIds[0]}`).uncheck();
+    await dialog.getByTestId('share-modal-count').fill('0');
+    await expect(dialog.getByRole('alert')).toBeVisible();
     await expect(preview).not.toBeVisible();
     await capture(page, 'desktop-light-invalid');
-    await share.getByTestId('share-min-count').fill('1');
+    await dialog.getByTestId('share-modal-count').fill('1');
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(preview).toBeVisible();
     expect(
@@ -154,8 +171,14 @@ test.describe('共通日程の共有', () => {
     await capture(page, 'mobile-light-preview');
     await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
     await capture(page, 'mobile-dark-preview');
-    await share.getByRole('button', { name: 'プレビューを閉じる' }).click();
+    await dialog.getByRole('button', { name: '閉じる', exact: true }).click();
+    await expect(dialog).not.toBeVisible();
     await expect(share.getByTestId('share-preview-open')).toBeVisible();
+    await expect(share.getByTestId('share-preview-open')).toBeFocused();
     await capture(page, 'mobile-dark-conditions');
+    await share.getByTestId('share-preview-open').click();
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+    await expect(share.getByTestId('share-preview-open')).toBeFocused();
   });
 });
