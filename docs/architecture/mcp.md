@@ -1,5 +1,7 @@
 # DaySynthのMCP接続
 
+未実装の検索・予定取得の追加仕様は[追加仕様案](../../specifications/mcp-search-feature.md)を参照する。本書の実装範囲には含めない。
+
 ## 実装範囲
 
 ChatGPTなどのMCPクライアントから、既存のGoogleログインに紐づくDaySynthアカウントで予定と回答を取得・更新する。Auth.jsとWeb版の権限モデルを維持し、イベント所有者のroleやAI専用の業務テーブルは追加しない。
