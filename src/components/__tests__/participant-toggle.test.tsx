@@ -111,9 +111,9 @@ describe('参加者トグル機能', () => {
     );
 
     // 参加者名がバッジとして表示されている
-    expect(screen.getByText('田中太郎')).toBeInTheDocument();
-    expect(screen.getByText('佐藤花子')).toBeInTheDocument();
-    expect(screen.getByText('鈴木次郎')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '田中太郎' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '佐藤花子' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '鈴木次郎' })).toBeInTheDocument();
 
     // 「表示選択:」ラベルが表示されている
     expect(screen.getByText('表示選択:')).toBeInTheDocument();
@@ -131,7 +131,7 @@ describe('参加者トグル機能', () => {
     );
 
     // 田中太郎のバッジを取得
-    const taroButton = screen.getByText('田中太郎').closest('button');
+    const taroButton = screen.getByRole('button', { name: '田中太郎' });
     expect(taroButton).toBeInTheDocument();
 
     // 初期状態では表示対象
@@ -157,7 +157,7 @@ describe('参加者トグル機能', () => {
     );
 
     // 佐藤花子のバッジを取得
-    const hanakoButton = screen.getByText('佐藤花子').closest('button');
+    const hanakoButton = screen.getByRole('button', { name: '佐藤花子' });
     expect(hanakoButton).toBeInTheDocument();
 
     // まず非表示状態にする
@@ -182,8 +182,8 @@ describe('参加者トグル機能', () => {
     );
 
     // 田中太郎と鈴木次郎のバッジを取得
-    const taroButton = screen.getByText('田中太郎').closest('button');
-    const jiroButton = screen.getByText('鈴木次郎').closest('button');
+    const taroButton = screen.getByRole('button', { name: '田中太郎' });
+    const jiroButton = screen.getByRole('button', { name: '鈴木次郎' });
 
     // 両方を非表示状態にする
     fireEvent.click(taroButton!);
@@ -194,7 +194,7 @@ describe('参加者トグル機能', () => {
     expect(jiroButton).toHaveAttribute('aria-pressed', 'true');
 
     // 佐藤花子は表示状態のまま
-    const hanakoButton = screen.getByText('佐藤花子').closest('button');
+    const hanakoButton = screen.getByRole('button', { name: '佐藤花子' });
     expect(hanakoButton).toHaveAttribute('aria-pressed', 'false');
   });
 
@@ -224,7 +224,7 @@ describe('参加者トグル機能', () => {
       />,
     );
 
-    const taroButton = screen.getByText('田中太郎').closest('button');
+    const taroButton = screen.getByRole('button', { name: '田中太郎' });
 
     // 初期状態ではaria-pressed="false"
     expect(taroButton).toHaveAttribute('aria-pressed', 'false');
@@ -245,7 +245,7 @@ describe('参加者トグル機能', () => {
       />,
     );
 
-    const taroButton = screen.getByText('田中太郎').closest('button');
+    const taroButton = screen.getByRole('button', { name: '田中太郎' });
 
     // 初期状態では「非表示にする」
     expect(taroButton).toHaveAttribute('title', '非表示にする');
@@ -266,7 +266,7 @@ describe('参加者トグル機能', () => {
       />,
     );
 
-    const taroButton = screen.getByText('田中太郎').closest('button');
+    const taroButton = screen.getByRole('button', { name: '田中太郎' });
 
     expect(taroButton).toHaveAttribute('aria-pressed', 'false');
 
@@ -285,7 +285,7 @@ describe('参加者トグル機能', () => {
       />,
     );
 
-    const taroButton = screen.getByText('田中太郎').closest('button');
+    const taroButton = screen.getByRole('button', { name: '田中太郎' });
 
     expect(taroButton).toHaveClass('transition-colors');
     // カーソルポインターが設定されている
@@ -303,7 +303,7 @@ describe('参加者トグル機能', () => {
       />,
     );
 
-    const taroButton = screen.getByText('田中太郎').closest('button');
+    const taroButton = screen.getByRole('button', { name: '田中太郎' });
 
     expect(taroButton).not.toHaveClass('line-through');
 
@@ -349,7 +349,7 @@ describe('参加者トグル機能', () => {
     // 初期状態では誰も除外されていない
     // AvailabilitySummaryコンポーネント内のテストで詳細は検証される想定
 
-    const taroButton = screen.getByText('田中太郎').closest('button');
+    const taroButton = screen.getByRole('button', { name: '田中太郎' });
     fireEvent.click(taroButton!);
 
     // クリック後は田中太郎が除外されている状態
@@ -368,8 +368,8 @@ describe('参加者トグル機能', () => {
       />,
     );
 
-    const taroButton = screen.getByText('田中太郎').closest('button');
-    const hanakoButton = screen.getByText('佐藤花子').closest('button');
+    const taroButton = screen.getByRole('button', { name: '田中太郎' });
+    const hanakoButton = screen.getByRole('button', { name: '佐藤花子' });
 
     // 初期状態では全員が表示状態
     expect(taroButton).toHaveAttribute('aria-pressed', 'false');
@@ -408,10 +408,10 @@ describe('参加者トグル機能', () => {
     );
 
     // 長い名前でもバッジとして表示される
-    expect(screen.getByText('とても長い名前の参加者さん')).toBeInTheDocument();
-    expect(screen.getByText('もう一人の長い名前の参加者')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'とても長い名前の参加者さん' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'もう一人の長い名前の参加者' })).toBeInTheDocument();
 
-    const longNameButton = screen.getByText('とても長い名前の参加者さん').closest('button');
+    const longNameButton = screen.getByRole('button', { name: 'とても長い名前の参加者さん' });
     expect(longNameButton).toHaveClass('participant-toggle', 'px-3', 'py-2');
   });
 
@@ -427,7 +427,7 @@ describe('参加者トグル機能', () => {
     );
 
     mockParticipants.forEach((participant) => {
-      const button = screen.getByText(participant.name).closest('button');
+      const button = screen.getByRole('button', { name: participant.name });
 
       // type="button"属性が設定されている
       expect(button).toHaveAttribute('type', 'button');
@@ -454,7 +454,7 @@ describe('参加者トグル機能', () => {
       />,
     );
 
-    const taroButton = screen.getByText('田中太郎').closest('button');
+    const taroButton = screen.getByRole('button', { name: '田中太郎' });
 
     // フォーカスを設定
     taroButton!.focus();
@@ -507,10 +507,10 @@ describe('参加者トグル機能', () => {
 
     // 4人の参加者がいることを確認
     expect(getParticipantButtons()).toHaveLength(4);
-    expect(screen.getByText('新規参加者')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '新規参加者' })).toBeInTheDocument();
 
     // 新しい参加者のバッジも正常に動作する
-    const newParticipantButton = screen.getByText('新規参加者').closest('button');
+    const newParticipantButton = screen.getByRole('button', { name: '新規参加者' });
     expect(newParticipantButton).toHaveAttribute('aria-pressed', 'false');
 
     fireEvent.click(newParticipantButton!);

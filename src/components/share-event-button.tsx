@@ -19,6 +19,9 @@ interface ShareEventButtonProps {
   includeTextInClipboard?: boolean;
   /** GA4 に送る共有対象の分類（デフォルト: 通常のイベント共有） */
   contentType?: ShareContentType;
+  /** Web Share対応端末でも本文をクリップボードへコピーする。 */
+  preferClipboard?: boolean;
+  disabled?: boolean;
 }
 
 export default function ShareEventButton({
@@ -30,15 +33,17 @@ export default function ShareEventButton({
   ariaLabel = 'イベントURLを共有',
   includeTextInClipboard = false,
   contentType = 'event',
+  preferClipboard = false,
+  disabled = false,
 }: ShareEventButtonProps) {
   const [isSharing, setIsSharing] = useState(false);
 
   const handleShare = async () => {
-    if (isSharing) return;
+    if (isSharing || disabled) return;
     setIsSharing(true);
     try {
       let method: ShareMethod;
-      if (navigator.share) {
+      if (navigator.share && !preferClipboard) {
         await navigator.share({
           url,
           title: title || siteConfig.share.defaultTitle,
@@ -51,11 +56,13 @@ export default function ShareEventButton({
         const clipboardText = includeTextInClipboard && text ? `${text}\n${url}` : url;
         await navigator.clipboard.writeText(clipboardText);
         method = 'clipboard';
-        toast.success('URLをコピーしました');
+        toast.success(
+          includeTextInClipboard && text ? '本文とURLをコピーしました' : 'URLをコピーしました',
+        );
       } else {
-        // fallback: input要素で選択コピー
+        // 複数行の本文を保ったまま選択コピーする。
         const clipboardText = includeTextInClipboard && text ? `${text}\n${url}` : url;
-        const input = document.createElement('input');
+        const input = document.createElement('textarea');
         input.value = clipboardText;
         document.body.appendChild(input);
         try {
@@ -68,7 +75,9 @@ export default function ShareEventButton({
           document.body.removeChild(input);
         }
         method = 'fallback';
-        toast.success('URLをコピーしました');
+        toast.success(
+          includeTextInClipboard && text ? '本文とURLをコピーしました' : 'URLをコピーしました',
+        );
       }
 
       try {
@@ -88,7 +97,7 @@ export default function ShareEventButton({
       type="button"
       className={`btn btn-outline btn-sm flex items-center gap-2 ${className}`}
       onClick={handleShare}
-      disabled={isSharing}
+      disabled={isSharing || disabled}
       aria-label={ariaLabel}
     >
       <svg

@@ -1,3 +1,5 @@
+import { toComparableDate } from '@/lib/schedule-utils';
+
 export type ShareEventDate = {
   id: string;
   start_time: string;
@@ -11,73 +13,96 @@ export type ShareAvailability = {
   availability: boolean;
 };
 
+export type AvailableDatesOptions = {
+  durationMinutes?: number;
+  requiredParticipantIds?: string[];
+};
+
 /**
- * 指定した参加人数以上が参加可能な日程を共有用メッセージに整形する
- * @param dates 候補日程
- * @param availabilities 回答データ
- * @param minCount 最低参加人数
- * @returns メッセージ文字列。該当日程が無い場合は「該当する日程がありません」のメッセージ。
+ * 同じ参加者が全時間を通して参加できる連続候補を求める。
+ * 人数だけで隣接枠を結合せず、途中で参加者が入れ替わる候補は分離する。
+ * 包含される短い候補は省くが、重なる候補を再結合しない。
  */
+export function findAvailableDateRanges(
+  dates: ShareEventDate[],
+  availabilities: ShareAvailability[],
+  minCount: number,
+  { durationMinutes = 0, requiredParticipantIds = [] }: AvailableDatesOptions = {},
+): Array<{ start: Date; end: Date }> {
+  if (
+    !Number.isInteger(minCount) ||
+    minCount < 1 ||
+    !Number.isInteger(durationMinutes) ||
+    durationMinutes < 0
+  )
+    return [];
+
+  const participantsByDate = new Map<string, Set<string>>();
+  for (const answer of availabilities) {
+    if (!answer.availability) continue;
+    const participants = participantsByDate.get(answer.event_date_id) ?? new Set<string>();
+    participants.add(answer.participant_id);
+    participantsByDate.set(answer.event_date_id, participants);
+  }
+  const slots = dates
+    .map((date) => ({
+      start: toComparableDate(date.start_time),
+      end: toComparableDate(date.end_time),
+      participants: participantsByDate.get(date.id) ?? new Set<string>(),
+    }))
+    .filter(({ start, end }) => Number.isFinite(start.getTime()) && end > start)
+    .sort((a, b) => a.start.getTime() - b.start.getTime() || b.end.getTime() - a.end.getTime());
+  const matches = (participants: Set<string>) =>
+    participants.size >= minCount && requiredParticipantIds.every((id) => participants.has(id));
+  const ranges: Array<{ start: Date; end: Date }> = [];
+
+  for (let i = 0; i < slots.length; i++) {
+    let common = slots[i].participants;
+    if (!matches(common)) continue;
+    const start = slots[i].start;
+    let end = slots[i].end;
+    for (let j = i + 1; j < slots.length; j++) {
+      if (slots[j].start.getTime() !== end.getTime()) break;
+      const nextCommon = new Set([...common].filter((id) => slots[j].participants.has(id)));
+      if (!matches(nextCommon)) break;
+      common = nextCommon;
+      end = slots[j].end;
+    }
+    if (end.getTime() - start.getTime() < durationMinutes * 60_000) continue;
+    const previous = ranges.at(-1);
+    if (!previous || previous.end < end) ranges.push({ start, end });
+  }
+  return ranges;
+}
+
+const dateKey = (date: Date) => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+const timeLabel = (date: Date) =>
+  `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+
+/** 指定条件で抽出した連続候補を、DaySynthの壁時計時刻で共有本文へ整形する。 */
 export function buildAvailableDatesMessage(
   dates: ShareEventDate[],
   availabilities: ShareAvailability[],
   minCount: number,
+  options: AvailableDatesOptions = {},
 ): string {
-  if (minCount <= 0) return '';
+  if (!Number.isInteger(minCount) || minCount < 1) return '';
+  const ranges = findAvailableDateRanges(dates, availabilities, minCount, options);
+  const durationLabel = options.durationMinutes ? `・連続${options.durationMinutes}分以上` : '';
+  const heading = `[${minCount}人以上が全時間に参加可能な日程${durationLabel}]`;
+  if (!ranges.length) return `${heading}\n該当する日程がありません`;
 
-  // 日付ごとに参加可能な時間帯を配列で保持
-  const grouped = new Map<string, { start: Date; end: Date }[]>();
-
-  dates.forEach((date) => {
-    const count = availabilities.filter(
-      (a) => a.event_date_id === date.id && a.availability,
-    ).length;
-    if (count >= minCount) {
-      const start = new Date(date.start_time);
-      const end = new Date(date.end_time);
-      const label = `${start.getMonth() + 1}月${start.getDate()}日`;
-      const arr = grouped.get(label) ?? [];
-      arr.push({ start, end });
-      grouped.set(label, arr);
-    }
-  });
-
-  if (grouped.size === 0) {
-    return `[${minCount}人以上が参加可能な日程]\n該当する日程がありません`;
+  const grouped = new Map<string, { date: Date; labels: string[] }>();
+  const includeYear =
+    new Set(ranges.flatMap(({ start, end }) => [start.getFullYear(), end.getFullYear()])).size > 1;
+  const dayLabel = (date: Date) =>
+    `${includeYear ? `${date.getFullYear()}年` : ''}${date.getMonth() + 1}月${date.getDate()}日`;
+  for (const { start, end } of ranges) {
+    const group = grouped.get(dateKey(start)) ?? { date: start, labels: [] };
+    const endLabel =
+      dateKey(start) === dateKey(end) ? timeLabel(end) : `${dayLabel(end)} ${timeLabel(end)}`;
+    group.labels.push(`${timeLabel(start)}-${endLabel}`);
+    grouped.set(dateKey(start), group);
   }
-
-  const lines = Array.from(grouped.entries())
-    // 日付順に並べ替え（各日付の最初の時間帯で判定）
-    .sort((a, b) => a[1][0].start.getTime() - b[1][0].start.getTime())
-    .map(([label, ranges]) => {
-      // 開始時刻順に並べ替え
-      ranges.sort((a, b) => a.start.getTime() - b.start.getTime());
-
-      // 隣接・重複する時間帯を統合
-      const merged: { start: Date; end: Date }[] = [];
-      for (const r of ranges) {
-        const last = merged[merged.length - 1];
-        if (last && r.start.getTime() <= last.end.getTime()) {
-          if (r.end > last.end) last.end = r.end;
-        } else {
-          merged.push({ start: r.start, end: r.end });
-        }
-      }
-
-      const rangeStrings = merged.map((m) => {
-        const startStr = `${m.start.getHours().toString().padStart(2, '0')}:${m.start
-          .getMinutes()
-          .toString()
-          .padStart(2, '0')}`;
-        const endStr = `${m.end.getHours().toString().padStart(2, '0')}:${m.end
-          .getMinutes()
-          .toString()
-          .padStart(2, '0')}`;
-        return `${startStr}-${endStr}`;
-      });
-
-      return `- ${label} ${rangeStrings.join(', ')}`;
-    });
-
-  return `[${minCount}人以上が参加可能な日程]` + '\n' + lines.join('\n');
+  return `${heading}\n${[...grouped.values()].map(({ date, labels }) => `- ${dayLabel(date)} ${labels.join(', ')}`).join('\n')}`;
 }
