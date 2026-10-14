@@ -670,15 +670,10 @@ describe('getFinalizedDateIds', () => {
     mockedCreateSupabaseAdmin.mockImplementation(() => ({
       from: (table: string) => {
         if (table === 'finalized_dates') {
-          const range = jest.fn().mockResolvedValueOnce({
+          return createSupabaseChainMock({
             data: [{ event_date_id: 'd1' }, { event_date_id: 'd2' }],
             error: null,
           });
-          return {
-            select: jest.fn(() => ({
-              eq: jest.fn(() => ({ order: jest.fn(() => ({ range })) })),
-            })),
-          };
         }
         return createSupabaseChainMock();
       },
@@ -692,17 +687,7 @@ describe('getFinalizedDateIds', () => {
     mockedCreateSupabaseAdmin.mockImplementation(() => ({
       from: (table: string) => {
         if (table === 'finalized_dates') {
-          return {
-            select: jest.fn(() => ({
-              eq: jest.fn(() => ({
-                order: jest.fn(() => ({
-                  range: jest.fn(() =>
-                    Promise.resolve({ data: null, error: { message: 'error' } }),
-                  ),
-                })),
-              })),
-            })),
-          };
+          return createSupabaseChainMock({ data: null, error: { message: 'error' } });
         }
         return createSupabaseChainMock();
       },

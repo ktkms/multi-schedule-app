@@ -160,44 +160,14 @@ export async function fetchAllPaginated<T>(
   query: SupabaseQueryInterface,
   pageSize = 1000,
 ): Promise<T[]> {
-  let allData: T[] = [];
-  let page = 0;
-  let hasMoreData = true;
-
-  while (hasMoreData) {
-    const result = (await query
-      .range(page * pageSize, (page + 1) * pageSize - 1)
-      .order('created_at', {
-        ascending: false,
-      })) as unknown as SupabaseQueryResult<T>;
-
-    const { data, error } = result;
-
-    if (error) {
-      console.error('データ取得エラー:', error);
-      throw error;
-    }
-
-    if (!data || data.length === 0) {
-      hasMoreData = false;
-    } else {
-      allData = [...allData, ...data];
-
-      // 取得したデータが要求したページサイズより少ない場合は、これ以上のデータがないと判断
-      if (data.length < pageSize) {
-        hasMoreData = false;
-      } else {
-        page++;
-      }
-    }
-  }
-
-  return allData;
+  return fetchAllPaginatedWithOrder<T>(query, 'created_at', { ascending: false }, pageSize);
 }
 
 /**
  * 指定したフィールドで並べ替えたデータをページネーション処理しながら全て取得する関数
- * @param query Supabaseのクエリオブジェクト
+ * 同値の行は一意なidの昇順で並べ、ページ境界での重複取得・取得漏れを防ぐ。
+ * 取得中の追加・削除・並べ替え対象の更新に対するスナップショットは保証しない。
+ * @param query 一意なid列を持つテーブルのSupabaseクエリ。並べ替えは未指定であること。
  * @param orderField 並び替えのフィールド
  * @param options 並び替えオプション
  * @param pageSize 1回あたりの取得サイズ（最大1000）
@@ -209,14 +179,21 @@ export async function fetchAllPaginatedWithOrder<T>(
   options: { ascending: boolean } = { ascending: true },
   pageSize = 1000,
 ): Promise<T[]> {
+  // orderはクエリを変更してソート条件を追記するため、ページごとに繰り返さない。
+  let orderedQuery = query.order(orderField, options);
+  if (orderField !== 'id') {
+    orderedQuery = orderedQuery.order('id', { ascending: true });
+  }
+
   let allData: T[] = [];
   let page = 0;
   let hasMoreData = true;
 
   while (hasMoreData) {
-    const result = (await query
-      .order(orderField, options)
-      .range(page * pageSize, (page + 1) * pageSize - 1)) as unknown as SupabaseQueryResult<T>;
+    const result = (await orderedQuery.range(
+      page * pageSize,
+      (page + 1) * pageSize - 1,
+    )) as unknown as SupabaseQueryResult<T>;
 
     const { data, error } = result;
 

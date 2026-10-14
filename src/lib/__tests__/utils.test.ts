@@ -21,21 +21,6 @@ interface MockQuery extends SupabaseQueryInterface {
   _call: number;
 }
 
-function createRangeFirstQuery(pages: Array<{ data: number[]; error: null }>): MockQuery {
-  const query: Partial<MockQuery> = {
-    _pages: pages,
-    _call: 0,
-    range: jest.fn(function (this: MockQuery) {
-      return this;
-    }) as unknown as (from: number, to: number) => SupabaseQueryInterface,
-    order: jest.fn(function (this: MockQuery) {
-      const res = this._pages[this._call++] || { data: [], error: null };
-      return Promise.resolve(res);
-    }) as unknown as (column: string, options?: { ascending: boolean }) => SupabaseQueryInterface,
-  };
-  return query as MockQuery;
-}
-
 function createOrderFirstQuery(pages: Array<{ data: number[]; error: null }>): MockQuery {
   const query: Partial<MockQuery> = {
     _pages: pages,
@@ -95,7 +80,7 @@ describe('ローカルストレージ履歴操作', () => {
 
 describe('Supabaseページネーションユーティリティ', () => {
   it('fetchAllPaginated', async () => {
-    const query = createRangeFirstQuery([
+    const query = createOrderFirstQuery([
       { data: [1, 2], error: null },
       { data: [3], error: null },
       { data: [], error: null },
