@@ -13,8 +13,22 @@ jobs:
   quality:
     name: Quality checks
     runs-on: ubuntu-latest
+    services:
+      mcp-postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: mcp_test
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 55438:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d mcp_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       CI: true
+      MCP_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55438/mcp_test
       SUPABASE_URL: http://127.0.0.1:54321
       SUPABASE_ANON_KEY: test-anon-key
       SUPABASE_SERVICE_ROLE_KEY: test-service-role-key

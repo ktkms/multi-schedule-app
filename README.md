@@ -174,6 +174,22 @@ npx supabase gen types typescript --linked > src/lib/database.types.ts
 | `npm run test:e2e:auth`          | 専用ポート3201で認証フローを実行  |
 | `npm run format`                 | Prettier で整形                   |
 
+### MCPのPostgreSQL回帰テスト
+
+CIでは隔離したPostgreSQL 16を起動し、MCPの検索・予定取得を実際のSQLで検証します。ローカルで実行する場合は、Dockerで専用DBを起動します。
+
+```bash
+docker run --rm --detach --name daysynth-mcp-test \
+  --publish 127.0.0.1:55438:5432 \
+  --env POSTGRES_DB=mcp_test --env POSTGRES_PASSWORD=mcp-local-test postgres:16
+docker exec daysynth-mcp-test pg_isready -U postgres -d mcp_test
+MCP_TEST_DATABASE_URL=postgresql://postgres:mcp-local-test@127.0.0.1:55438/mcp_test \
+  npm run test:unit -- --runInBand src/lib/__tests__/mcp-read-services.integration.test.ts
+docker stop daysynth-mcp-test
+```
+
+`pg_isready`で接続可能になってからテストを実行してください。回帰テストは専用DB内の対象テーブルを再作成するため、開発用・本番用のDBを指定しないでください。接続先は`localhost`または`127.0.0.1`の`mcp_test`データベースに限定します。`MCP_TEST_DATABASE_URL`を省略した通常のJest実行では、PostgreSQL回帰テストをスキップします。
+
 ## デプロイ方法
 
 - Vercel へのデプロイを想定しています。
