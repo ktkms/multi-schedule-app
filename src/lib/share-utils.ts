@@ -1,5 +1,3 @@
-import { toComparableDate } from '@/lib/schedule-utils';
-
 export type ShareEventDate = {
   id: string;
   start_time: string;
@@ -18,10 +16,19 @@ export type AvailableDatesOptions = {
   requiredParticipantIds?: string[];
 };
 
+/** 保存済みの壁時計時刻をUTC座標へ載せ、端末のタイムゾーンと夏時間を介さず比較する。 */
+const toShareWallClockDate = (value: string): Date => {
+  const match = value.match(
+    /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)(?:Z|[+-]\d{2}:?\d{2})?$/,
+  );
+  return new Date(match ? `${match[1]}T${match[2]}Z` : NaN);
+};
+
 /**
  * 同じ参加者が全時間を通して参加できる連続候補を求める。
  * 人数だけで隣接枠を結合せず、途中で参加者が入れ替わる候補は分離する。
  * 包含される短い候補は省くが、重なる候補を再結合しない。
+ * 返すDateは壁時計時刻の比較用UTC座標であり、表示時もUTC系の取得メソッドを使う。
  */
 export function findAvailableDateRanges(
   dates: ShareEventDate[],
@@ -46,8 +53,8 @@ export function findAvailableDateRanges(
   }
   const slots = dates
     .map((date) => ({
-      start: toComparableDate(date.start_time),
-      end: toComparableDate(date.end_time),
+      start: toShareWallClockDate(date.start_time),
+      end: toShareWallClockDate(date.end_time),
       participants: participantsByDate.get(date.id) ?? new Set<string>(),
     }))
     .filter(({ start, end }) => Number.isFinite(start.getTime()) && end > start)
@@ -75,15 +82,16 @@ export function findAvailableDateRanges(
   return ranges;
 }
 
-const dateKey = (date: Date) => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+const dateKey = (date: Date) =>
+  `${date.getUTCFullYear()}-${date.getUTCMonth()}-${date.getUTCDate()}`;
 const timeLabel = (date: Date) =>
-  `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  `${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')}`;
 
 /** 翌日ちょうど0時の終了だけを、開始日の24時として扱う。 */
 const endsAtNextMidnight = (start: Date, end: Date) => {
   const nextMidnight = new Date(start);
-  nextMidnight.setDate(nextMidnight.getDate() + 1);
-  nextMidnight.setHours(0, 0, 0, 0);
+  nextMidnight.setUTCDate(nextMidnight.getUTCDate() + 1);
+  nextMidnight.setUTCHours(0, 0, 0, 0);
   return nextMidnight.getTime() === end.getTime();
 };
 
@@ -105,12 +113,12 @@ export function buildAvailableDatesMessage(
     new Set(
       ranges.flatMap(({ start, end }) =>
         endsAtNextMidnight(start, end)
-          ? [start.getFullYear()]
-          : [start.getFullYear(), end.getFullYear()],
+          ? [start.getUTCFullYear()]
+          : [start.getUTCFullYear(), end.getUTCFullYear()],
       ),
     ).size > 1;
   const dayLabel = (date: Date) =>
-    `${includeYear ? `${date.getFullYear()}年` : ''}${date.getMonth() + 1}月${date.getDate()}日`;
+    `${includeYear ? `${date.getUTCFullYear()}年` : ''}${date.getUTCMonth() + 1}月${date.getUTCDate()}日`;
   for (const { start, end } of ranges) {
     const group = grouped.get(dateKey(start)) ?? { date: start, labels: [] };
     const endLabel = endsAtNextMidnight(start, end)

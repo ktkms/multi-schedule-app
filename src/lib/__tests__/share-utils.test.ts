@@ -106,8 +106,39 @@ describe('連続候補の共有条件', () => {
         availability: true,
       })),
     );
+
+  it.each([
+    ['2026-03-08', '3月8日'],
+    ['2026-03-29', '3月29日'],
+  ])('夏時間開始日の候補も保存済みの時刻で表示する（%s）', (day, label) => {
+    const dates = [{ id: 'd0', start_time: `${day}T02:00:00`, end_time: `${day}T03:00:00` }];
+    expect(
+      buildAvailableDatesMessage(dates, answers([['a']]), 1, { durationMinutes: 60 }),
+    ).toContain(`${label} 02:00-03:00`);
+  });
+
+  it.each([
+    ['2026-11-01', '01', '02'],
+    ['2026-10-25', '02', '03'],
+  ])('夏時間終了日の1時間を2時間と判定しない（%s）', (day, startHour, endHour) => {
+    const dates = [
+      { id: 'd0', start_time: `${day}T${startHour}:00:00`, end_time: `${day}T${endHour}:00:00` },
+    ];
+    expect(findAvailableDateRanges(dates, answers([['a']]), 1, { durationMinutes: 120 })).toEqual(
+      [],
+    );
+  });
+
+  it('夏時間開始日も壁時計で2時間の候補を保持する', () => {
+    const dates = [
+      { id: 'd0', start_time: '2026-03-08T01:00:00', end_time: '2026-03-08T03:00:00' },
+    ];
+    expect(
+      buildAvailableDatesMessage(dates, answers([['a']]), 1, { durationMinutes: 120 }),
+    ).toContain('3月8日 01:00-03:00');
+  });
   const hours = (ranges: ReturnType<typeof findAvailableDateRanges>) =>
-    ranges.map(({ start, end }) => [start.getHours(), end.getHours()]);
+    ranges.map(({ start, end }) => [start.getUTCHours(), end.getUTCHours()]);
 
   it('参加者が入れ替わる枠を人数だけで結合しない', () => {
     expect(
