@@ -2,13 +2,11 @@
 
 import { useEffect, useRef, type ReactNode } from 'react';
 
-type ConfirmationModalProps = {
+type ConfirmationModalBaseProps = {
   isOpen: boolean;
   title: string;
   description?: ReactNode;
-  confirmLabel: string;
   cancelLabel?: string;
-  onConfirm: () => void;
   onCancel: () => void;
   confirmButtonClassName?: string;
   isConfirming?: boolean;
@@ -16,6 +14,12 @@ type ConfirmationModalProps = {
   children?: ReactNode;
   widthClassName?: string;
 };
+
+type ConfirmationModalProps = ConfirmationModalBaseProps &
+  (
+    | { confirmLabel: string; onConfirm: () => void; confirmAction?: never }
+    | { confirmAction: ReactNode; confirmLabel?: never; onConfirm?: never }
+  );
 
 /**
  * 操作確認用の共通モーダル
@@ -27,6 +31,7 @@ export default function ConfirmationModal({
   title,
   description,
   confirmLabel,
+  confirmAction,
   cancelLabel = 'キャンセル',
   onConfirm,
   onCancel,
@@ -71,9 +76,16 @@ export default function ConfirmationModal({
         if (event.key !== 'Tab') return;
         const focusable = Array.from(
           dialogRef.current?.querySelectorAll<HTMLElement>(
-            'button:not(:disabled):not([tabindex="-1"]), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]',
+            'summary, button:not(:disabled):not([tabindex="-1"]), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]',
           ) ?? [],
-        );
+        ).filter((element) => {
+          const closedDetails = element.closest('details:not([open])');
+          return (
+            !element.closest('[hidden]') &&
+            (!closedDetails ||
+              (element.tagName === 'SUMMARY' && element.parentElement === closedDetails))
+          );
+        });
         const first = focusable[0];
         const last = focusable.at(-1);
         if (
@@ -103,14 +115,16 @@ export default function ConfirmationModal({
           >
             {cancelLabel}
           </button>
-          <button
-            type="button"
-            className={`btn ${confirmButtonClassName}`}
-            onClick={onConfirm}
-            disabled={isConfirming}
-          >
-            {isConfirming ? (confirmingLabel ?? `${confirmLabel}中...`) : confirmLabel}
-          </button>
+          {confirmAction ?? (
+            <button
+              type="button"
+              className={`btn ${confirmButtonClassName}`}
+              onClick={onConfirm}
+              disabled={isConfirming}
+            >
+              {isConfirming ? (confirmingLabel ?? `${confirmLabel}中...`) : confirmLabel}
+            </button>
+          )}
         </div>
       </div>
       <button
