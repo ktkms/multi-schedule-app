@@ -61,7 +61,7 @@ UI変更時は`docs/architecture/ai-driven-design-guidelines.md`をデザイン�
 - 基本確認: `npm run lint`、`npm run typecheck`、変更箇所に関連するテスト
 - ドキュメントのみの変更: `git diff --check`と対象Markdownのフォーマット確認
 - 影響範囲が広い変更: `npm run test:ci`、`npm run build`
-- UI変更: 関連するunit testを実行し、画面の見た目や表示状態を変更する場合はPlaywrightによる実画面確認とスクリーンショットの撮影・目視確認を行う。
+- UI変更: 関連するunit testと、必要に応じてPlaywrightによる実画面確認
 - 主要フロー、認証、複数画面へ影響する変更: `npm run test:e2e:chrome`
 - E2Eの要素取得は、表示文言やclass名より`data-testid`または`data-e2e`を優先する。
 - 失敗した検証は、原因を調査して修正する。今回の変更と無関係な失敗は、再現条件と判断根拠を報告する。
@@ -74,9 +74,5 @@ UI変更時は`docs/architecture/ai-driven-design-guidelines.md`をデザイン�
 - コミットメッセージは日本語 + Conventional Commitsとする（例: `feat: 回答履歴を追加`）。
 - 大きな変更は設計判断を`docs/architecture/`へ整理し、必要に応じてDraft PRで共有する。
 - PRではテンプレートの目的、変更点、動作確認、影響範囲、スクリーンショット、関連Issueを埋める。
-- 画面の見た目や表示状態を変更するPRには、変更箇所と主要な表示状態のスクリーンショットをPR本文またはコメントへ掲載する。各画像に画面名、表示状態、画面幅、テーマを併記し、比較が必要な変更では変更前後を示す。
-- 撮影対象は変更の影響範囲に合わせて選ぶ。モバイル／デスクトップを確認し、ライト／ダーク、通常・空・エラー・読み込み中・モーダル表示など、変更の影響を受ける条件を撮影する。影響のない状態や全組み合わせの網羅は求めない。
-- 実画面確認、撮影またはPRへの画像掲載ができない場合は、未実施の項目と理由をPRに明記する。未確認の状態を確認済みとして扱わない。
-- 確認用の一時画像はGit管理対象外の場所へ保存し、リポジトリへコミット・pushしない。
 - GitHubへ日本語本文を送る処理はWSL内でUTF-8のまま完結させる。Windows PowerShellのhere-stringやパイプを`gh --body-file -`へ渡さない。
 - Windows側から送信する必要がある場合は本文をUTF-8でBase64化し、WSL内で復号したJSONを`gh api --input -`へ渡す。送信後はAPIで再取得し、先頭BOMと`???`がないことを確認する。
