@@ -1,15 +1,13 @@
 import 'server-only';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { z } from 'zod';
-import { createSupabaseAdmin } from '@/lib/supabase';
-import { fetchUserScheduleBlocks } from '@/lib/schedule-service';
 import {
   answerInput,
   answerReadInput,
   answerScheduleInput,
   eventInput,
   scheduleInput,
-  weekInput,
+  eventSearchInput,
+  scheduleReadInput,
 } from './schemas';
 import { MCP_TOOL_SCOPES, mcpChallenge, toolSecurity, type McpToolName } from './authorization';
 import {
@@ -21,6 +19,7 @@ import {
   saveMyAnswerToSchedule,
   updateMySchedule,
 } from './services';
+import { listMyEvents, readMySchedule } from './read-services';
 
 /** HTTPリクエストごとに認証済み本人を閉じ込め、別ユーザーへの状態の混入を防ぐ。 */
 export function createMcpServer(identity: { userId: string; scopes: string[] } | null) {
@@ -71,31 +70,19 @@ export function createMcpServer(identity: { userId: string; scopes: string[] } |
   server.registerTool(
     'list_my_events',
     {
-      description: '本人のアカウントに紐づくイベントを一覧取得する。続きはoffsetを指定する。',
-      inputSchema: z.object({ offset: z.number().int().min(0).max(100000).default(0) }).strict(),
+      description:
+        '本人に紐づくイベントを期間・名前・確定状態で検索する。date_from/date_toは日本時間の日付で終了日も含む。date_targetの既定はeffective（未確定は候補、確定済みは確定日時）。candidateで元の候補、finalizedで確定日時を検索する。期間指定時は日程順。一致日時は最大3件で、省略フラグがtrueならget_eventで詳細を確認する。続きは同じ検索条件とlimitでoffsetを指定する。',
+      inputSchema: eventSearchInput,
       annotations: read,
       _meta: toolSecurity('list_my_events'),
     },
-    ({ offset }) =>
-      run('list_my_events', async () => {
-        const { data, error } = await createSupabaseAdmin()
-          .from('user_event_links')
-          .select('events(title,public_token,is_finalized)')
-          .eq('user_id', user.userId)
-          .order('id')
-          .range(offset, offset + 99);
-        if (error) throw new Error();
-        return {
-          events: (data ?? []).map((row) => row.events).filter(Boolean),
-          next_offset: data?.length === 100 ? offset + 100 : null,
-        };
-      }),
+    (input) => run('list_my_events', () => listMyEvents(user.userId, input)),
   );
   server.registerTool(
     'get_event',
     {
       description:
-        '公開トークンからイベントと候補日時を取得する。日時は既存の保存形式で、日本時間の壁時計時刻として読む。',
+        '公開トークンからイベント、候補日時datesと確定日時finalized_datesを取得する。旧形式の確定日程も参照する。日時は既存の保存形式で、日本時間の壁時計時刻として読む。',
       inputSchema: eventInput,
       annotations: read,
       _meta: toolSecurity('get_event'),
@@ -117,16 +104,13 @@ export function createMcpServer(identity: { userId: string; scopes: string[] } |
   server.registerTool(
     'get_my_schedule',
     {
-      description: '指定日から7日間の本人の予定を取得する。日時は日本時間の壁時計時刻として読む。',
-      inputSchema: weekInput,
+      description:
+        '本人の登録済み予定を取得する。week_startで7日間、またはdate_from/date_toで終了日を含め最大31日間を指定する。両形式は併用できない。availabilityで登録済みの可・不可を絞れる。未登録は参加可能ではなく不明。確定イベントとの照合結果ではない。日時は日本時間の壁時計時刻として読む。',
+      inputSchema: scheduleReadInput,
       annotations: read,
       _meta: toolSecurity('get_my_schedule'),
     },
-    ({ week_start }) =>
-      run('get_my_schedule', async () => ({
-        blocks: await fetchUserScheduleBlocks(user.userId, week_start, true),
-        time_zone: 'Asia/Tokyo',
-      })),
+    (input) => run('get_my_schedule', () => readMySchedule(user.userId, input)),
   );
   server.registerTool(
     'save_my_answer',

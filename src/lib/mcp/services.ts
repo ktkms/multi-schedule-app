@@ -10,6 +10,7 @@ import {
   buildAnswerScheduleBlocks,
 } from '@/lib/schedule-service';
 import { loadAnswerSchedule, answerScheduleAvailability, type AnswerDate } from './answer-context';
+import { readEventDates } from './read-services';
 import {
   answerInput,
   answerScheduleInput,
@@ -22,28 +23,9 @@ import {
 export class McpInputError extends Error {}
 
 export async function readEvent(publicToken: string) {
-  const supabase = createSupabaseAdmin();
-  const { data: event, error } = await supabase
-    .from('events')
-    .select('id,title,description,public_token,is_finalized')
-    .eq('public_token', publicToken)
-    .maybeSingle();
-  if (error) throw new Error('イベントを取得できませんでした');
+  const event = await readEventDates(publicToken);
   if (!event) throw new McpInputError('イベントが見つかりません');
-  const dates = [];
-  for (let from = 0; ; from += 1000) {
-    const page = await supabase
-      .from('event_dates')
-      .select('id,start_time,end_time')
-      .eq('event_id', event.id)
-      .order('start_time')
-      .order('id')
-      .range(from, from + 999);
-    if (page.error) throw new Error('候補日時を取得できませんでした');
-    dates.push(...(page.data ?? []));
-    if (!page.data || page.data.length < 1000) break;
-  }
-  return { ...event, dates, time_zone: 'Asia/Tokyo' };
+  return event;
 }
 
 export async function readMyAnswer(

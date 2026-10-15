@@ -52,7 +52,71 @@ export const scheduleInput = z
     return duration > 0 && duration <= 7 * 24 * 60 * 60 * 1000;
   }, '期間は正の長さで7日以内にしてください');
 
-export const weekInput = z.object({ week_start: z.iso.date() }).strict();
+const calendarDate = z.iso
+  .date()
+  .refine(
+    (value) => value >= '0001-01-01' && value < '9999-12-31',
+    '翌日まで表現できる実在する日付を指定してください',
+  );
+const periodFields = { date_from: calendarDate.optional(), date_to: calendarDate.optional() };
+const validPeriod = (input: { date_from?: string; date_to?: string }) =>
+  Boolean(input.date_from) === Boolean(input.date_to) &&
+  (!input.date_from || !input.date_to || input.date_from <= input.date_to);
+
+export const eventSearchInput = z
+  .object({
+    ...periodFields,
+    date_target: z.enum(['effective', 'candidate', 'finalized']).optional(),
+    query: z.string().trim().min(1).max(100).optional(),
+    is_finalized: z.boolean().optional(),
+    offset: z.number().int().min(0).max(100000).default(0),
+    limit: z.number().int().min(1).max(100).default(100),
+  })
+  .strict()
+  .refine(validPeriod, '開始日と終了日を両方指定し、終了日を開始日以降にしてください')
+  .refine(
+    (input) => !input.date_target || Boolean(input.date_from),
+    '検索対象の指定には期間が必要です',
+  )
+  .refine(
+    (input) => input.date_target !== 'finalized' || input.is_finalized !== false,
+    '確定日時の検索に未確定の条件は指定できません',
+  );
+
+export const scheduleReadInput = z
+  .object({
+    ...periodFields,
+    week_start: calendarDate.optional(),
+    availability: z.boolean().optional(),
+  })
+  .strict()
+  .refine(validPeriod, '開始日と終了日を両方指定し、終了日を開始日以降にしてください')
+  .refine(
+    (input) => Boolean(input.week_start) !== Boolean(input.date_from),
+    '週開始日または開始日と終了日の組を指定してください',
+  )
+  .refine(
+    (input) => !input.week_start || input.week_start <= '9999-12-24',
+    '7日間の終了日時を表現できる週開始日を指定してください',
+  )
+  .refine(
+    (input) =>
+      !input.date_from ||
+      !input.date_to ||
+      Date.parse(input.date_to + 'T00:00:00Z') - Date.parse(input.date_from + 'T00:00:00Z') <
+        31 * 86400000,
+    '予定の取得期間は終了日を含めて31日以内にしてください',
+  );
+
+/** 日本時間の壁時計日付を、既存の保存表現に合わせた半開区間へ変換する。 */
+export function readPeriod(dateFrom: string, dateTo: string = dateFrom, daysAfter = 1) {
+  const end = new Date(dateTo + 'T00:00:00Z');
+  end.setUTCDate(end.getUTCDate() + daysAfter);
+  return { start: dateFrom + 'T00:00:00Z', end: end.toISOString() };
+}
+
+export type EventSearchInput = z.infer<typeof eventSearchInput>;
+export type ScheduleReadInput = z.infer<typeof scheduleReadInput>;
 export type AnswerInput = z.infer<typeof answerInput>;
 export type ScheduleInput = z.infer<typeof scheduleInput>;
 

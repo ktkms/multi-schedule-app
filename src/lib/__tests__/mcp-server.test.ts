@@ -2,6 +2,12 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createMcpServer } from '@/lib/mcp/server';
 import { readMyAnswer, saveMyAnswer, saveMyAnswerToSchedule } from '@/lib/mcp/services';
+import { listMyEvents, readMySchedule } from '@/lib/mcp/read-services';
+
+jest.mock('@/lib/mcp/read-services', () => ({
+  listMyEvents: jest.fn(),
+  readMySchedule: jest.fn(),
+}));
 
 jest.mock('@/lib/mcp/services', () => ({
   McpInputError: class extends Error {},
@@ -27,6 +33,52 @@ describe('MCP SDKの接続と操作', () => {
     await client.connect(clientTransport);
     return { server, client };
   }
+  it('SDK経由で期間検索と既存形式・任意期間の予定取得を利用できる', async () => {
+    const { client, server } = await connect('me', ['daysynth.read']);
+    try {
+      (listMyEvents as jest.Mock).mockResolvedValue({ events: [], next_offset: null });
+      (readMySchedule as jest.Mock).mockResolvedValue({ blocks: [], time_zone: 'Asia/Tokyo' });
+      const search = { date_from: '2026-10-10', date_to: '2026-10-20', query: '打合せ', limit: 20 };
+      expect(
+        (await client.callTool({ name: 'list_my_events', arguments: search })).isError,
+      ).not.toBe(true);
+      expect(listMyEvents).toHaveBeenCalledWith('me', { ...search, offset: 0 });
+      for (const args of [
+        { week_start: '2026-10-10' },
+        { date_from: '2026-10-10', date_to: '2026-10-10', availability: false },
+      ]) {
+        expect(
+          (await client.callTool({ name: 'get_my_schedule', arguments: args })).isError,
+        ).not.toBe(true);
+        expect(readMySchedule).toHaveBeenCalledWith('me', args);
+      }
+      const invalid = await client.callTool({
+        name: 'list_my_events',
+        arguments: { date_from: '2026-10-10' },
+      });
+      expect(invalid.isError).toBe(true);
+      expect(listMyEvents).toHaveBeenCalledTimes(1);
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+  it('権限のない接続は検索・予定のDB処理を呼ばない', async () => {
+    const { client, server } = await connect('me', []);
+    try {
+      for (const [name, args] of [
+        ['list_my_events', {}],
+        ['get_my_schedule', { week_start: '2026-10-10' }],
+      ] as const) {
+        expect((await client.callTool({ name, arguments: args })).isError).toBe(true);
+      }
+      expect(listMyEvents).not.toHaveBeenCalled();
+      expect(readMySchedule).not.toHaveBeenCalled();
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
   it('実際のSDKクライアントからツールを列挙して本人の回答を取得できる', async () => {
     const { client, server } = await connect('me', ['daysynth.read']);
     try {
