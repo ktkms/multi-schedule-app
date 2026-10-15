@@ -29,7 +29,6 @@ interface SiteConfig {
     eventText: string; // イベント回答依頼の共有本文
     finalizedEventText: string; // 確定済みイベントの共有本文
     availableDatesTitle: string; // 共通日程共有タイトル
-    availableDatesIntro: string; // 共通日程共有本文の導入文
   };
   // ロゴ設定
   logo: {
@@ -70,7 +69,6 @@ const siteConfig: SiteConfig = {
     eventText: 'DaySynthで候補日を共有しています。都合のよい予定を入力してください。',
     finalizedEventText: 'DaySynthで確定した日程です。内容を確認してください。',
     availableDatesTitle: 'DaySynthで共通日程を共有',
-    availableDatesIntro: 'DaySynthで予定の重なりから見つけた候補です。',
   },
   logo: {
     main: '/logo/favicon.svg', // メインロゴ（すでに設定されているパス）

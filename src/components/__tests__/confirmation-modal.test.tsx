@@ -53,4 +53,26 @@ describe('ConfirmationModal', () => {
     fireEvent.click(screen.getByRole('button', { name: '確認モーダルを閉じる' }));
     expect(onCancel).not.toHaveBeenCalled();
   });
+
+  it('閉じた詳細条件の入力へフォーカスを移さず、共有操作からsummaryへ循環する', () => {
+    render(
+      <ConfirmationModal
+        isOpen
+        title="共有内容を確認"
+        onCancel={jest.fn()}
+        confirmAction={<button>共有する</button>}
+      >
+        <details>
+          <summary>条件を絞る</summary>
+          <input aria-label="非表示の条件" />
+        </details>
+      </ConfirmationModal>,
+    );
+    const share = screen.getByRole('button', { name: '共有する' });
+    share.focus();
+    fireEvent.keyDown(share, { key: 'Tab' });
+    expect(screen.getByText('条件を絞る')).toHaveFocus();
+    fireEvent.keyDown(document.activeElement!, { key: 'Tab', shiftKey: true });
+    expect(share).toHaveFocus();
+  });
 });

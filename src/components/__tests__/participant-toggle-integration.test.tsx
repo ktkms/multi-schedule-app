@@ -104,7 +104,7 @@ describe('参加者トグル機能の統合テスト', () => {
       />,
     );
 
-    const taroButton = screen.getByText('田中太郎').closest('button');
+    const taroButton = screen.getByRole('button', { name: '田中太郎' });
     fireEvent.click(taroButton!);
 
     expect(taroButton).toHaveAttribute('aria-pressed', 'true');
@@ -136,8 +136,8 @@ describe('参加者トグル機能の統合テスト', () => {
       />,
     );
 
-    const taroButton = screen.getByText('田中太郎').closest('button');
-    const misakiButton = screen.getByText('高橋美咲').closest('button');
+    const taroButton = screen.getByRole('button', { name: '田中太郎' });
+    const misakiButton = screen.getByRole('button', { name: '高橋美咲' });
     fireEvent.click(taroButton!);
     fireEvent.click(misakiButton!);
 
@@ -156,7 +156,7 @@ describe('参加者トグル機能の統合テスト', () => {
       />,
     );
 
-    const hanakoButton = screen.getByText('佐藤花子').closest('button');
+    const hanakoButton = screen.getByRole('button', { name: '佐藤花子' });
 
     fireEvent.click(hanakoButton!);
     expect(hanakoButton).toHaveAttribute('aria-pressed', 'true');
