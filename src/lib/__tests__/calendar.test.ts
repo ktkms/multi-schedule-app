@@ -80,7 +80,9 @@ describe('generateGoogleCalendarUrl', () => {
       description: '説明文',
       location: '東京駅',
     });
-    expect(url).toMatch(/^https:\/\/calendar.google.com\/calendar\/r\/eventedit\?/);
+    const calendarUrl = new URL(url);
+    expect(calendarUrl.origin).toBe('https://calendar.google.com');
+    expect(calendarUrl.pathname).toBe('/calendar/r/eventedit');
     expect(url).toContain('text=%E3%83%86%E3%82%B9%E3%83%88%E3%82%A4%E3%83%99%E3%83%B3%E3%83%88');
     expect(url).toContain('dates=20250510T100000Z%2F20250510T110000Z');
     expect(url).toContain('details=%E8%AA%AC%E6%98%8E%E6%96%87');
