@@ -1,0 +1,44 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 3
+    groups:
+      framework-minor-patch:
+        applies-to: version-updates
+        patterns:
+          - next
+          - eslint-config-next
+          - react
+          - react-dom
+          - '@types/react'
+          - '@types/react-dom'
+        update-types: [minor, patch]
+      production-minor-patch:
+        applies-to: version-updates
+        dependency-type: production
+        patterns: ['*']
+        update-types: [minor, patch]
+      development-minor-patch:
+        applies-to: version-updates
+        dependency-type: development
+        patterns: ['*']
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 2
+    groups:
+      actions-minor-patch:
+        applies-to: version-updates
+        patterns: ['*']
+        update-types: [minor, patch]
