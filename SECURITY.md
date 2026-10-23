@@ -39,3 +39,4 @@ If it is not available, please contact the maintainer via the GitHub profile @kt
 - Dependabot alerts と security updates を有効にします。通常のバージョン更新は npm と GitHub Actions を対象に、毎週月曜の日本時間 9 時に確認します。
 - minor／patch 更新はグループ化し、major 更新は個別の PR とします。通常更新の同時オープン数は npm が 3 件、GitHub Actions が 2 件までです。security updates はこの上限の対象外です。
 - Actions は標準ランナーを使用し、独自の成果物アップロードは追加しません。アプリの CI は Node.js 22 で実行し、同じ PR の古い実行をキャンセルします。
+- main への変更は PR を経由し、品質チェックの成功を必須とします。CodeQL のマージ保護では error と High／Critical の新規アラートをブロックします。
