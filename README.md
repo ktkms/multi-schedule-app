@@ -61,7 +61,7 @@ CAPTURE_UIUX_SCREENSHOTS=true npm run test:e2e:chrome:public
 
 ### 前提条件
 
-- Node.js 20 以上
+- Node.js 22 以上
 - npm 10 系
 - Docker
 - Supabase CLI
