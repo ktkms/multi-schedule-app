@@ -63,7 +63,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/testing-library__react": "^10.2.0",
-    "concurrently": "^9.1.2",
+    "concurrently": "^10.0.6",
     "eslint": "^9",
     "eslint-config-next": "^16.4.2",
     "jest": "^30.5.2",
