@@ -31,11 +31,17 @@ describe('supabase.ts', () => {
     expect(client).toEqual({ client: true });
   });
 
-  it('anonクライアントを生成する', async () => {
+  it('公開フロー用クライアントもサーバー権限で生成する', async () => {
     process.env.SUPABASE_URL = 'https://example.supabase.co';
-    process.env.SUPABASE_ANON_KEY = 'anon';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service';
+    delete process.env.SUPABASE_ANON_KEY;
     const { createSupabaseClient } = await import('../supabase');
     const client = createSupabaseClient();
     expect(client).toEqual({ client: true });
+    expect(createClient).toHaveBeenCalledWith(
+      'https://example.supabase.co',
+      'service',
+      expect.objectContaining({ auth: expect.objectContaining({ persistSession: false }) }),
+    );
   });
 });
