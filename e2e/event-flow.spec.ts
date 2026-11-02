@@ -111,6 +111,34 @@ declare global {
 }
 
 // 直列でE2Eフローを分割
+test('手動選択した候補だけでイベントを作成する', async ({ page }) => {
+  await page.goto('/create');
+  await page.getByLabel('イベントタイトル').fill('E2E手動選択');
+  await page.getByTestId('create-next').click();
+  await page.getByTestId('input-mode-manual').click();
+  await page.getByRole('button', { name: '次へ', exact: true }).click();
+  const dates = page.locator('input[type="date"]');
+  await dates.nth(0).fill('2099-02-02');
+  await dates.nth(1).fill('2099-02-02');
+  const times = page.locator('input[type="time"]');
+  await times.nth(0).fill('10:00');
+  await times.nth(1).fill('12:00');
+  await page.getByRole('button', { name: 'カレンダーへ' }).click();
+  const slots = page.getByTestId('slot-cell');
+  await slots.first().click();
+  await expect(slots.first()).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: '次へ', exact: true }).click();
+  await page.getByLabel('利用規約').check();
+  await page.getByRole('button', { name: /イベントを作成/ }).click();
+  await page.waitForURL(/\/event\//);
+  const eventUrl = new URL(page.url());
+  eventUrl.search = '';
+  await page.goto(`${eventUrl}/input`);
+  await page.getByLabel('お名前').fill('候補確認');
+  await proceedAsGuest(page);
+  await page.getByRole('button', { name: '次へ', exact: true }).click();
+  await expect(page.locator('button[data-selection-key]')).toHaveCount(1);
+});
 
 test.describe.serial('イベントE2Eフロー', () => {
   test.describe.configure({ timeout: 60_000 });
@@ -187,7 +215,37 @@ test.describe.serial('イベントE2Eフロー', () => {
     if (await participantTerms.isVisible()) {
       await participantTerms.check();
     }
+    let failedSave = false;
+    await participantPage.route('**/event/**/input', async (route) => {
+      const request = route.request();
+      if (
+        !failedSave &&
+        request.method() === 'POST' &&
+        request.headers()['next-action'] &&
+        (request.postData() ?? '').includes('E2Eコメント')
+      ) {
+        failedSave = true;
+        await route.abort('failed');
+      } else {
+        await route.continue();
+      }
+    });
     await participantPage.getByRole('button', { name: /回答を送信/ }).click();
+    await expect.poll(() => failedSave).toBe(true);
+    await expect(
+      participantPage.getByRole('alert').filter({ has: participantPage.locator('p') }),
+    ).toBeVisible();
+    await expect(participantPage.getByLabel('コメント・メモ')).toHaveValue('E2Eコメント');
+    await participantPage.getByRole('button', { name: '戻る', exact: true }).click();
+    await expect(dateCells.first()).toHaveText('○');
+    await expect(dateCells.nth(1)).toHaveText('○');
+    await participantPage.getByRole('button', { name: '確認へ進む' }).click();
+    await expect(participantPage.getByText(`お名前: ${participantName}`)).toBeVisible();
+    await participantPage.getByLabel(/利用規約/).check();
+    await participantPage.getByRole('button', { name: /回答を送信/ }).click();
+    await participantPage.waitForURL(/\/input\/complete\?participant_id=/);
+    const savedId = new URL(participantPage.url()).searchParams.get('participant_id');
+    expect(savedId).toBeTruthy();
 
     // 回答送信後の画面遷移を待機し、"回答状況の確認・集計に戻る" ボタンがあればクリック
     await waitForEventDetail(participantPage);
@@ -213,6 +271,14 @@ test.describe.serial('イベントE2Eフロー', () => {
       await dumpPageHtml(participantPage, 'DEBUG: 参加者表示失敗 page.content()');
       throw e;
     }
+    await expect(
+      participantPage.getByRole('button', { name: new RegExp(participantName) }),
+    ).toHaveCount(1);
+    await participantPage.goto(`${eventPublicUrl}/input?participant_id=${savedId}`);
+    await expect(dateCells.first()).toHaveText('○');
+    await expect(dateCells.nth(1)).toHaveText('○');
+    await participantPage.getByRole('button', { name: '確認へ進む' }).click();
+    await expect(participantPage.getByLabel('コメント・メモ')).toHaveValue('E2Eコメント');
     await participantPage.close();
   });
 
@@ -240,6 +306,18 @@ test.describe.serial('イベントE2Eフロー', () => {
     await proceedAsGuest(page);
     await page.locator('td[data-day="月"][data-time-slot]').first().click();
     await page.getByRole('button', { name: '次へ' }).click();
+    // 選択した月曜日（2099-01-05）を含む週で、保存前後の回答を比較する。
+    const nextWeekButton = page.getByRole('button', { name: '次の週へ移動' });
+    await nextWeekButton.click();
+    await expect(nextWeekButton).toBeDisabled();
+    const weeklySelectedKeys = await page
+      .locator('button[data-selection-key]')
+      .evaluateAll((cells) =>
+        cells
+          .filter((cell) => cell.textContent === '○')
+          .map((cell) => cell.getAttribute('data-selection-key')),
+      );
+    expect(weeklySelectedKeys.length).toBeGreaterThan(0);
     await page.getByRole('button', { name: '確認へ進む' }).click();
     const terms2 = page.getByLabel(/利用規約/);
     if (await terms2.isVisible()) {
@@ -247,6 +325,9 @@ test.describe.serial('イベントE2Eフロー', () => {
     }
     await page.waitForLoadState('networkidle');
     await page.getByRole('button', { name: /回答を送信/ }).click();
+    await page.waitForURL(/\/input\/complete\?participant_id=/);
+    const weeklySavedId = new URL(page.url()).searchParams.get('participant_id');
+    expect(weeklySavedId).toBeTruthy();
 
     // 回答送信後の画面遷移を待機し、"回答状況の確認・集計に戻る" ボタンがあればクリック
     await waitForEventDetail(page);
@@ -261,6 +342,19 @@ test.describe.serial('イベントE2Eフロー', () => {
     await expect(page.getByRole('button', { name: /週表示参加者/ })).toBeVisible({
       timeout: 20000,
     });
+    await page.reload();
+    await expect(page.getByRole('button', { name: /週表示参加者/ })).toHaveCount(1);
+    await page.goto(`${eventPublicUrl}/input?participant_id=${weeklySavedId}`);
+    await nextWeekButton.click();
+    await expect(nextWeekButton).toBeDisabled();
+    const persistedKeys = await page
+      .locator('button[data-selection-key]')
+      .evaluateAll((cells) =>
+        cells
+          .filter((cell) => cell.textContent === '○')
+          .map((cell) => cell.getAttribute('data-selection-key')),
+      );
+    expect(persistedKeys).toEqual(weeklySelectedKeys);
   });
 
   test('既存回答の編集', async ({ page }) => {
@@ -301,7 +395,14 @@ test.describe.serial('イベントE2Eフロー', () => {
     const participantNamePrefix = originalParticipantName?.split(' ')[0] || '週表示参加者';
     await page.getByRole('menuitem', { name: new RegExp(`^${participantNamePrefix}`) }).click();
     await page.waitForURL(/\/input\?participant_id=/);
+    const editUrl = page.url();
+    const editedCell = page.locator('button[data-selection-key]').first();
+    const originalStatus = await editedCell.textContent();
+    await editedCell.click();
+    const changedStatus = await editedCell.textContent();
+    expect(changedStatus).not.toBe(originalStatus);
     await page.getByRole('button', { name: '確認へ進む' }).click();
+    await page.getByLabel('コメント・メモ').fill('編集後のコメント');
     await expect(page.locator('#participant_name_confirm')).toHaveCount(0);
     const editTermsCheckbox = page.getByLabel(/利用規約/);
     if (await editTermsCheckbox.isVisible()) {
@@ -318,6 +419,15 @@ test.describe.serial('イベントE2Eフロー', () => {
       await backToSummaryBtn.click();
     }
 
+    await page.reload();
+    await expect(page.getByRole('button', { name: new RegExp(participantNamePrefix) })).toHaveCount(
+      1,
+    );
+    await page.goto(editUrl);
+    await expect(editedCell).toHaveText(changedStatus!);
+    await page.getByRole('button', { name: '確認へ進む' }).click();
+    await expect(page.getByLabel('コメント・メモ')).toHaveValue('編集後のコメント');
+    await page.goto(eventPublicUrl);
     // 編集後も参加者が表示選択バッジに残ることを確認
     await expect(page.getByRole('button', { name: new RegExp(participantNamePrefix) })).toBeVisible(
       {

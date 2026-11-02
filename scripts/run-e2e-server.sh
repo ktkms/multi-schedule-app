@@ -10,6 +10,7 @@ case "$suite" in
     config_args=(--project=chromium --grep-invert @auth-required)
     ;;
   auth)
+    export E2E_REQUIRE_AUTH=true
     port="${E2E_AUTH_PORT:-3201}"
     export ENABLE_DEV_LOGIN="${ENABLE_DEV_LOGIN:-true}"
     export NEXT_PUBLIC_ENABLE_DEV_LOGIN="${NEXT_PUBLIC_ENABLE_DEV_LOGIN:-true}"
@@ -20,6 +21,11 @@ case "$suite" in
     export NEXTAUTH_URL="http://localhost:${port}"
     export E2E_DEV_LOGIN_ID="${E2E_DEV_LOGIN_ID:-e2e-dev}"
     export E2E_DEV_LOGIN_PASSWORD="${E2E_DEV_LOGIN_PASSWORD:-e2e-devpass}"
+    if [[ "$ENABLE_DEV_LOGIN" != true || "$NEXT_PUBLIC_ENABLE_DEV_LOGIN" != true ||
+          "$ALLOW_DEV_LOGIN_IN_PRODUCTION" != true || "$NEXT_PUBLIC_ALLOW_DEV_LOGIN_IN_PRODUCTION" != true ]]; then
+      echo "必須の認証E2Eにはサーバー側・画面側の開発用ログインと本番モードでの利用許可をすべて有効にしてください。" >&2
+      exit 1
+    fi
     config_args=(--config playwright.auth.config.ts --project=chromium e2e/account-management.spec.ts)
     ;;
   *)

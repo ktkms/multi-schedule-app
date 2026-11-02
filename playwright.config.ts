@@ -18,7 +18,7 @@ export default defineConfig({
     headless: true,
     viewport: { width: 1280, height: 720 },
     trace: 'on-first-retry',
-    video: 'on',
+    video: 'retain-on-failure',
     locale: 'ja-JP',
     // launchOptions は空にしておく
     launchOptions: {},

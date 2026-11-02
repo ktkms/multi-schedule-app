@@ -8,6 +8,11 @@ test.describe('MCP接続 @auth-required', () => {
   );
 
   test('ログイン・拒否・許可・コード交換・失効', async ({ page, request }) => {
+    if (!process.env.MCP_CLIENTS || !process.env.NEXTAUTH_URL) {
+      throw new Error(
+        'MCP E2Eにはサーバーと同じMCP_CLIENTSとNEXTAUTH_URLを環境変数で渡してください',
+      );
+    }
     const clients = JSON.parse(process.env.MCP_CLIENTS ?? '[]') as Array<{
       id: string;
       name: string;

@@ -175,6 +175,23 @@ npx supabase gen types typescript --linked > src/lib/database.types.ts
 | `npm run test:e2e:auth`          | 専用ポート3201で認証フローを実行  |
 | `npm run format`                 | Prettier で整形                   |
 
+### ブラウザE2Eテスト
+
+MCPのブラウザE2Eテストは `npm run test:e2e:mcp` で別途実行します。通常の公開テストコマンドは
+`@auth-required` を除外し、認証コマンドはアカウント管理テストだけを指定するため、MCPは対象外です。
+検証用DB・認証テーブルと開発用ログインを用意し、別ターミナルで開発サーバーを起動してください。
+例: `ENABLE_DEV_LOGIN=true NEXT_PUBLIC_ENABLE_DEV_LOGIN=true NEXTAUTH_URL=http://localhost:3201 npm run dev -- --port 3201`。
+テスト側にも `E2E_BASE_URL=http://localhost:3201 NEXTAUTH_URL=http://localhost:3201`、
+開発ログインと同じ `DEV_LOGIN_ID` / `DEV_LOGIN_PASSWORD`、`MCP_CLIENTS` を設定して実行します。
+`MCP_CLIENTS` はサーバーとテストの両方に同じJSONを渡してください。形式は
+[MCP接続](docs/architecture/mcp.md)を参照してください。`.env.local` はMCPテスト側では自動的に読み込まれません。
+HTTPのlocalhostを使う場合は開発モードが必要です。本番モードではHTTPSが必須です。
+
+`npm run test:e2e:chrome` の認証段階では、必須環境の不備や前提テーブルの不足を失敗として扱います。
+公開段階が失敗した場合、後続の認証段階は実行されません。各テスト結果（成功・失敗・スキップ）とその理由を
+確認し、スキップや未実行を検証完了に含めないでください。動画は失敗時だけ保存します。
+E2Eで画面幅を変更しただけでは、タッチ操作を検証したことにはなりません。
+
 ### MCPのPostgreSQL回帰テスト
 
 CIでは隔離したPostgreSQL 16を起動し、MCPの検索・予定取得を実際のSQLで検証します。ローカルで実行する場合は、Dockerで専用DBを起動します。

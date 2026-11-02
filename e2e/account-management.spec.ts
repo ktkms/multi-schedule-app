@@ -64,8 +64,15 @@ const loadRuntimeConfig = (): RuntimeConfig => {
 };
 
 const runtime = loadRuntimeConfig();
+if (process.env.E2E_REQUIRE_AUTH === 'true' && !runtime.dbUrl) {
+  throw new Error('必須の認証E2EにはSUPABASE_DB_URLが必要です');
+}
 const isDevLoginEnabled =
-  process.env.ENABLE_DEV_LOGIN === 'true' || process.env.NEXT_PUBLIC_ENABLE_DEV_LOGIN === 'true';
+  process.env.ENABLE_DEV_LOGIN === 'true' && process.env.NEXT_PUBLIC_ENABLE_DEV_LOGIN === 'true';
+
+if (process.env.E2E_REQUIRE_AUTH === 'true' && !isDevLoginEnabled) {
+  throw new Error('必須の認証E2Eにはサーバー側・画面側の開発用ログインが必要です');
+}
 
 const randomToken = (length: number): string => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -163,6 +170,7 @@ test.describe('アカウント連携管理E2E @auth-required', () => {
     if (!schemaRow?.users_table || !schemaRow?.blocks_table) {
       schemaSkipReason =
         'E2E前提テーブルが不足しています（authjs.users / public.user_schedule_blocks）。マイグレーション適用後に再実行してください。';
+      if (process.env.E2E_REQUIRE_AUTH === 'true') throw new Error(schemaSkipReason);
       return;
     }
 
@@ -495,7 +503,8 @@ test.describe('アカウント連携管理E2E @auth-required', () => {
       })
       .toEqual({ source: 'manual', event_id: null });
 
-    const saveScheduleButton = page.getByRole('button', { name: '保存する' });
+    await expect(page.getByTestId('answer-complete-page')).toBeVisible({ timeout: 10000 });
+    const saveScheduleButton = page.getByTestId('complete-save-schedule');
     await expect(saveScheduleButton).toBeVisible();
     await saveScheduleButton.click();
 
