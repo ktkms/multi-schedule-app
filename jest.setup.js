@@ -8,7 +8,7 @@ if (typeof global.TextEncoder === 'undefined') {
   global.TextEncoder = TextEncoder;
   global.TextDecoder = TextDecoder;
 }
-// Web Streams APIのポリフィル（undici用）
+// Web Streams APIのポリフィル
 if (typeof global.ReadableStream === 'undefined') {
   global.ReadableStream = ReadableStream;
 }
