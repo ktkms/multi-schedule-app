@@ -1,5 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
-
 jest.mock('@supabase/supabase-js', () => ({
   createClient: jest.fn(() => ({ client: true })),
 }));
@@ -9,7 +7,6 @@ describe('supabase.ts', () => {
 
   beforeEach(() => {
     jest.resetModules();
-    (createClient as jest.Mock).mockClear();
     process.env = { ...ORIGINAL_ENV };
   });
 
@@ -36,6 +33,7 @@ describe('supabase.ts', () => {
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'service';
     delete process.env.SUPABASE_ANON_KEY;
     const { createSupabaseClient } = await import('../supabase');
+    const { createClient } = await import('@supabase/supabase-js');
     const client = createSupabaseClient();
     expect(client).toEqual({ client: true });
     expect(createClient).toHaveBeenCalledWith(
