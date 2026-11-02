@@ -76,7 +76,6 @@
     "supabase": "^2.122.0",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "undici": "^7.29.1",
     "wait-on": "^9.5.1",
     "web-streams-polyfill": "^4.3.0"
   },
