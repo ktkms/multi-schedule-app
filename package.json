@@ -21,6 +21,7 @@
     "test:e2e:chrome": "npm run test:e2e:chrome:public && npm run test:e2e:auth",
     "test:e2e:chrome:public": "bash scripts/run-e2e-server.sh public",
     "test:e2e:auth": "bash scripts/run-e2e-server.sh auth",
+    "test:e2e:mcp": "E2E_MCP=true npx playwright test --config playwright.auth.config.ts e2e/mcp-flow.spec.ts",
     "test:e2e:chrome:headed": "npx playwright test --headed --project=chromium",
     "test:e2e:webkit": "npx playwright test --headed --project=webkit --project=\"Mobile Safari\"",
     "e2e:dev": "concurrently \"npm run dev\" \"npx playwright test --headed\"",
