@@ -31,8 +31,21 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      data-api-postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: data_api_security_test
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 55439:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d data_api_security_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       CI: true
+      DATA_API_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55439/data_api_security_test
       MCP_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55438/mcp_test
       SUPABASE_URL: http://127.0.0.1:54321
       SUPABASE_ANON_KEY: test-anon-key
@@ -54,6 +67,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - run: npm run test:db:data-api
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run test:ci

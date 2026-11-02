@@ -18,13 +18,9 @@ export const createSupabaseAdmin = (): SupabaseClient<Database> => {
   });
 };
 
-// Create the Supabase client with anon key (for server-side public operations)
-export const createSupabaseClient = (): SupabaseClient<Database> => {
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Supabase credentials not available. Check environment variables.');
-  }
-
-  return createClient<Database>(supabaseUrl, supabaseAnonKey);
-};
+/**
+ * 旧来の公開フロー向けサーバー専用クライアント。
+ * 匿名キーによるDB直接アクセスを廃止し、サーバー内でのみservice_roleを使う。
+ * 呼び出し元との互換性のため関数名は維持する。
+ */
+export const createSupabaseClient = (): SupabaseClient<Database> => createSupabaseAdmin();

@@ -168,6 +168,7 @@ npx supabase gen types typescript --linked > src/lib/database.types.ts
 | `npm run test`                   | Jest ウォッチ実行                 |
 | `npm run test:ci`                | CI 向け Jest 実行                 |
 | `npm run test:unit`              | Jest 実行                         |
+| `npm run test:db:data-api`       | DB直接アクセス権限の回帰テスト    |
 | `npm run test:e2e`               | Playwright 実行                   |
 | `npm run test:e2e:chrome`        | 公開フロー + 認証フローの推奨実行 |
 | `npm run test:e2e:chrome:public` | 専用ポート3200で公開フローを実行  |
@@ -189,6 +190,22 @@ docker stop daysynth-mcp-test
 ```
 
 `pg_isready`で接続可能になってからテストを実行してください。回帰テストは専用DB内の対象テーブルを再作成するため、開発用・本番用のDBを指定しないでください。接続先は`localhost`または`127.0.0.1`の`mcp_test`データベースに限定します。`MCP_TEST_DATABASE_URL`を省略した通常のJest実行では、PostgreSQL回帰テストをスキップします。
+
+### Data API権限のPostgreSQL回帰テスト
+
+`npm run test:db:data-api` は、空の使い捨てPostgreSQLに既存マイグレーションと権限制限マイグレーションを適用し、匿名・認証済みロールのアクセス拒否とservice_roleの回答保存・日程確定を検証します。CIでもMCPテストとは別のDBで実行します。
+
+```bash
+docker run --rm --detach --name daysynth-data-api-test \
+  --publish 127.0.0.1:55439:5432 \
+  --env POSTGRES_DB=data_api_security_test --env POSTGRES_PASSWORD=data-api-local-test postgres:16
+docker exec daysynth-data-api-test pg_isready -U postgres -d data_api_security_test
+DATA_API_TEST_DATABASE_URL=postgresql://postgres:data-api-local-test@127.0.0.1:55439/data_api_security_test \
+  npm run test:db:data-api
+docker stop daysynth-data-api-test
+```
+
+接続先は`localhost`または`127.0.0.1`の`data_api_security_test`に限定し、既存テーブルがある場合は中断します。`pg_isready`で接続可能になってから実行してください。再実行時はコンテナを作り直してください。開発用・本番用DBは指定しないでください。Nodeで検証するため、過去の初期化SQLにあるpgTAP拡張の作成だけを省略します。権限制限マイグレーションは加工せず適用します。
 
 ## デプロイ方法
 
