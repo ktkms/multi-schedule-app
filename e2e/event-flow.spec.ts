@@ -231,8 +231,10 @@ test.describe.serial('イベントE2Eフロー', () => {
       }
     });
     await participantPage.getByRole('button', { name: /回答を送信/ }).click();
-    await expect(participantPage.getByRole('alert')).toBeVisible();
-    expect(failedSave).toBe(true);
+    await expect.poll(() => failedSave).toBe(true);
+    await expect(
+      participantPage.getByRole('alert').filter({ has: participantPage.locator('p') }),
+    ).toBeVisible();
     await expect(participantPage.getByLabel('コメント・メモ')).toHaveValue('E2Eコメント');
     await participantPage.getByRole('button', { name: '戻る', exact: true }).click();
     await expect(dateCells.first()).toHaveText('○');
@@ -304,6 +306,10 @@ test.describe.serial('イベントE2Eフロー', () => {
     await proceedAsGuest(page);
     await page.locator('td[data-day="月"][data-time-slot]').first().click();
     await page.getByRole('button', { name: '次へ' }).click();
+    // 選択した月曜日（2099-01-05）を含む週で、保存前後の回答を比較する。
+    const nextWeekButton = page.getByRole('button', { name: '次の週へ移動' });
+    await nextWeekButton.click();
+    await expect(nextWeekButton).toBeDisabled();
     const weeklySelectedKeys = await page
       .locator('button[data-selection-key]')
       .evaluateAll((cells) =>
@@ -339,6 +345,8 @@ test.describe.serial('イベントE2Eフロー', () => {
     await page.reload();
     await expect(page.getByRole('button', { name: /週表示参加者/ })).toHaveCount(1);
     await page.goto(`${eventPublicUrl}/input?participant_id=${weeklySavedId}`);
+    await nextWeekButton.click();
+    await expect(nextWeekButton).toBeDisabled();
     const persistedKeys = await page
       .locator('button[data-selection-key]')
       .evaluateAll((cells) =>

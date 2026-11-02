@@ -503,7 +503,8 @@ test.describe('アカウント連携管理E2E @auth-required', () => {
       })
       .toEqual({ source: 'manual', event_id: null });
 
-    const saveScheduleButton = page.getByRole('button', { name: '保存する' });
+    await expect(page.getByTestId('answer-complete-page')).toBeVisible({ timeout: 10000 });
+    const saveScheduleButton = page.getByTestId('complete-save-schedule');
     await expect(saveScheduleButton).toBeVisible();
     await saveScheduleButton.click();
 
