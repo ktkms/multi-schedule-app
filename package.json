@@ -34,7 +34,6 @@
     "@modelcontextprotocol/sdk": "1.32.1",
     "@supabase/supabase-js": "^2.118.0",
     "@types/uuid": "^10.0.0",
-    "@vercel/og": "^0.6.8",
     "daisyui": "^5.7.50",
     "date-fns": "^4.4.0",
     "date-fns-tz": "^3.2.0",
