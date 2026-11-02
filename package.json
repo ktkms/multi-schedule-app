@@ -72,7 +72,7 @@
     "next": "^16.4.2",
     "prettier": "^3.9.10",
     "prettier-plugin-tailwindcss": "^0.8.1",
-    "supabase": "^2.121.0",
+    "supabase": "^2.122.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "undici": "^7.29.1",
