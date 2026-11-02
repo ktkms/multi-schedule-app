@@ -27,7 +27,8 @@
     "e2e": "npm run build && concurrently \"npm run start\" \"npx playwright test\"",
     "e2e:headless": "npm run build && npm run start & npx playwright test --reporter=dot",
     "e2e:ci": "npm run e2e:headless",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "test:db:data-api": "node --test scripts/test-data-api-access.mjs"
   },
   "dependencies": {
     "@auth/pg-adapter": "^1.11.3",
