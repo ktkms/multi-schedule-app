@@ -7,7 +7,7 @@ import {
   useTransition,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
-import { MessageSquare } from 'lucide-react';
+import { Circle, MessageSquare, Triangle, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { z } from 'zod';
 import { getDateFirstAnswer, saveDateFirst } from '@/lib/date-first-actions';
@@ -298,7 +298,7 @@ export default function DateFirstAnswerEditor({
           {kind === 'days' ? (
             <div ref={container} className="space-y-4">
               <p className="text-base-content/65 text-sm">
-                ○は当日0〜24時の参加可。翌朝の条件は△の時間で指定できます。
+                ○は当日0〜24時を通して参加可能な場合に選びます。翌朝の条件は△の時間で指定できます。
               </p>
               {data.days.map((day) => {
                 const draft = days[day.id],
@@ -310,26 +310,31 @@ export default function DateFirstAnswerEditor({
                         {candidateDayLabel(day.date)}
                       </span>
                       <div className="flex gap-1">
-                        {(['yes', 'maybe', 'no'] as const).map((status) => (
-                          <button
-                            key={status}
-                            type="button"
-                            data-day-status={day.id}
-                            data-testid={`day-${day.id}-${status}`}
-                            className={`btn min-w-10 touch-none px-3 ${draft.status === status ? 'btn-primary' : 'btn-ghost'}`}
-                            aria-label={`${candidateDayLabel(day.date)} ${symbol(status)}`}
-                            aria-pressed={draft.status === status}
-                            onPointerDown={(e) => startGesture(e, day.id, status)}
-                            onClick={(e) => {
-                              if (e.detail !== 0) return;
-                              const next = draft.status === status ? null : status;
-                              changeDay(day.id, { status: next, statusDirty: true });
-                              if (next === 'maybe') setExpanded((old) => new Set([...old, day.id]));
-                            }}
-                          >
-                            {symbol(status)}
-                          </button>
-                        ))}
+                        {(['yes', 'maybe', 'no'] as const).map((status) => {
+                          const Icon =
+                            status === 'yes' ? Circle : status === 'maybe' ? Triangle : X;
+                          return (
+                            <button
+                              key={status}
+                              type="button"
+                              data-day-status={day.id}
+                              data-testid={`day-${day.id}-${status}`}
+                              className={`btn min-w-10 touch-none px-0 ${draft.status === status ? 'btn-primary' : 'btn-ghost'}`}
+                              aria-label={`${candidateDayLabel(day.date)} ${symbol(status)}`}
+                              aria-pressed={draft.status === status}
+                              onPointerDown={(e) => startGesture(e, day.id, status)}
+                              onClick={(e) => {
+                                if (e.detail !== 0) return;
+                                const next = draft.status === status ? null : status;
+                                changeDay(day.id, { status: next, statusDirty: true });
+                                if (next === 'maybe')
+                                  setExpanded((old) => new Set([...old, day.id]));
+                              }}
+                            >
+                              <Icon size={18} aria-hidden="true" />
+                            </button>
+                          );
+                        })}
                       </div>
                       <button
                         type="button"
@@ -439,7 +444,11 @@ export default function DateFirstAnswerEditor({
                             }))
                           }
                         >
-                          {value ? '○' : '×'}
+                          {value ? (
+                            <Circle size={18} aria-hidden="true" />
+                          ) : (
+                            <X size={18} aria-hidden="true" />
+                          )}
                         </button>
                       ))}
                     </div>

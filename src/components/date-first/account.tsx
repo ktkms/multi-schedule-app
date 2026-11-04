@@ -126,7 +126,7 @@ export default function DateFirstAccount({
       <ConfirmationModal
         isOpen={linkConfirm}
         title="この回答を自分に紐付けますか？"
-        description={`「${data.participants.find((p) => p.id === participant)?.name ?? ''}」さんの回答を、自分のアカウント予定・MCPで使います。共有リンクでの共同編集は引き続き可能です。`}
+        description={`「${data.participants.find((p) => p.id === participant)?.name ?? ''}」さんの回答を、自分のアカウント予定やAI連携（MCP）で使います。共有リンクでの共同編集は引き続き可能です。`}
         confirmLabel="自分の回答として紐付ける"
         isConfirming={pending}
         onCancel={() => setLinkConfirm(false)}

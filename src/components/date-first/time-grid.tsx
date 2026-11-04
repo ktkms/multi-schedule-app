@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Plus } from 'lucide-react';
 import useSelectionDragController from '@/hooks/useSelectionDragController';
 import { formatDayMinute } from '@/lib/date-first-schema';
 import {
@@ -64,22 +65,35 @@ export default function DateFirstTimeGrid({
     disableBodyScroll: true,
   });
   const hasPartial = value.some(([lo, hi]) => lo % 60 !== 0 || hi % 60 !== 0);
+  const rowCount = Math.ceil((end - start) / 720);
   return (
     <div className="space-y-2" data-time-grid={id}>
-      <div className="-mx-3 space-y-1 sm:mx-0" role="group" aria-label="参加可能な時間">
-        {Array.from({ length: Math.ceil((end - start) / 720) }, (_, row) => {
+      <p id={`${id}-time-help`} className="text-base-content/65 text-sm">
+        可能な時間を入力してください。
+      </p>
+      <div
+        className="-mx-3 space-y-1 sm:mx-0"
+        role="group"
+        aria-label="参加可能な時間"
+        aria-describedby={`${id}-time-help`}
+      >
+        {Array.from({ length: rowCount }, (_, row) => {
           const rowStart = start + row * 720;
           return (
             <div key={row} data-time-row className="grid grid-cols-[repeat(14,minmax(0,1fr))]">
-              <button
-                type="button"
-                className="min-h-11 text-sm disabled:opacity-30"
-                disabled={disabled || start <= 0}
-                aria-label="表示を1時間早める"
-                onClick={() => setStart(Math.max(0, start - 60))}
-              >
-                ＋
-              </button>
+              {row === 0 ? (
+                <button
+                  type="button"
+                  className="min-h-11 text-sm disabled:opacity-30"
+                  disabled={disabled || start <= 0}
+                  aria-label="表示を1時間早める"
+                  onClick={() => setStart(Math.max(0, start - 60))}
+                >
+                  <Plus size={18} className="mx-auto" aria-hidden="true" />
+                </button>
+              ) : (
+                <span aria-hidden="true" />
+              )}
               {Array.from(
                 { length: Math.min(12, (end - rowStart) / 60) },
                 (_, index) => rowStart + index * 60,
@@ -103,15 +117,17 @@ export default function DateFirstTimeGrid({
                   </button>
                 );
               })}
-              <button
-                type="button"
-                className="col-start-14 min-h-11 text-sm disabled:opacity-30"
-                disabled={disabled || end >= 1800}
-                aria-label="表示を1時間遅く延ばす"
-                onClick={() => setEnd(Math.min(1800, end + 60))}
-              >
-                ＋
-              </button>
+              {row === rowCount - 1 && (
+                <button
+                  type="button"
+                  className="min-h-11 text-sm disabled:opacity-30"
+                  disabled={disabled || end >= 1800}
+                  aria-label="表示を1時間後ろに延ばす"
+                  onClick={() => setEnd(Math.min(1800, end + 60))}
+                >
+                  <Plus size={18} className="mx-auto" aria-hidden="true" />
+                </button>
+              )}
             </div>
           );
         })}

@@ -43,7 +43,7 @@ test('日付回答から詳細時間・確定・解除・カレンダーまで�
   await expect(editor.getByTestId('date-first-answer-name')).toHaveValue('同じ名前');
   const day = editor.getByTestId(`day-answer-${first}`);
   for (let i = 0; i < 4; i++)
-    await day.getByRole('button', { name: '表示を1時間遅く延ばす' }).last().click();
+    await day.getByRole('button', { name: '表示を1時間後ろに延ばす' }).click();
   for (const label of ['22:00〜23:00', '23:00〜24:00', '24:00〜翌1:00', '翌1:00〜翌2:00'])
     await day.getByRole('button', { name: label, exact: true }).click();
   await day.getByRole('button', { name: /のコメント/ }).click();

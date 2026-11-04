@@ -94,12 +94,15 @@ const reviewAndSave = async () => {
 it('表示の拡張だけでは回答を変更せず、当日0時から翌6時の境界で止める', () => {
   const change = jest.fn();
   render(<DateFirstTimeGrid id="grid" value={[]} baseRanges={[[0, 1440]]} onChange={change} />);
-  expect(screen.getAllByRole('button', { name: '表示を1時間早める' })).toHaveLength(2);
-  expect(screen.getAllByRole('button', { name: '表示を1時間早める' })[0]).toBeDisabled();
+  expect(screen.getByRole('button', { name: '表示を1時間早める' })).toBeDisabled();
+  expect(screen.getByRole('group', { name: '参加可能な時間' })).toHaveAccessibleDescription(
+    '可能な時間を入力してください。',
+  );
   for (let i = 0; i < 6; i++)
-    fireEvent.click(screen.getAllByRole('button', { name: '表示を1時間遅く延ばす' }).at(-1)!);
+    fireEvent.click(screen.getByRole('button', { name: '表示を1時間後ろに延ばす' }));
   expect(screen.getByRole('button', { name: '翌5:00〜翌6:00' })).toBeInTheDocument();
-  expect(screen.getAllByRole('button', { name: '表示を1時間遅く延ばす' }).at(-1)).toBeDisabled();
+  expect(screen.getByRole('button', { name: '表示を1時間早める' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: '表示を1時間後ろに延ばす' })).toBeDisabled();
   expect(change).not.toHaveBeenCalled();
 });
 

@@ -59,7 +59,7 @@ export default function DateFirstCreate() {
         Array.from(title.trim()).length > 200 ||
         Array.from(description).length > 5000)
     ) {
-      setError('タイトルは200文字以内、説明は5000文字以内で入力してください。');
+      setError('イベント名は200文字以内、説明は5000文字以内で入力してください。');
       return;
     }
     if (step === 2 && !dateFirstCommandSchema.safeParse(build()).success) {
