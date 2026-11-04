@@ -26,7 +26,7 @@ case "$suite" in
       echo "必須の認証E2Eにはサーバー側・画面側の開発用ログインと本番モードでの利用許可をすべて有効にしてください。" >&2
       exit 1
     fi
-    config_args=(--config playwright.auth.config.ts --project=chromium e2e/account-management.spec.ts)
+    config_args=(--config playwright.auth.config.ts --project=chromium e2e/account-management.spec.ts e2e/date-first-account.spec.ts)
     ;;
   *)
     echo "使用方法: $0 <public|auth>" >&2

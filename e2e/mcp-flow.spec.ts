@@ -7,7 +7,40 @@ test.describe('MCP接続 @auth-required', () => {
     'MCP用の事前登録クライアントと検証DBを用意した場合だけ実行する',
   );
 
+  test('実HTTP本文の127/128/129KiB境界をContent-Length有無の両方で検証する', async ({
+    request,
+    baseURL,
+  }) => {
+    for (const kib of [127, 128, 129]) {
+      const prefix = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' });
+      const body = prefix + ' '.repeat(kib * 1024 - Buffer.byteLength(prefix));
+      const headers = {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+      };
+      const response = await request.post('/mcp', { headers, data: body });
+      expect(response.status()).toBe(kib <= 128 ? 200 : 413);
+      const stream = new ReadableStream({
+        start(controller) {
+          const bytes = new TextEncoder().encode(body);
+          controller.enqueue(bytes.slice(0, 65000));
+          controller.enqueue(bytes.slice(65000));
+          controller.close();
+        },
+      });
+      const streamed = await fetch(new URL('/mcp', baseURL), {
+        method: 'POST',
+        headers,
+        body: stream,
+        duplex: 'half',
+      } as RequestInit & { duplex: 'half' });
+      expect(streamed.status).toBe(kib <= 128 ? 200 : 413);
+      await streamed.arrayBuffer();
+    }
+  });
+
   test('ログイン・拒否・許可・コード交換・失効', async ({ page, request }) => {
+    test.setTimeout(60000);
     if (!process.env.MCP_CLIENTS || !process.env.NEXTAUTH_URL) {
       throw new Error(
         'MCP E2Eにはサーバーと同じMCP_CLIENTSとNEXTAUTH_URLを環境変数で渡してください',
@@ -43,7 +76,7 @@ test.describe('MCP接続 @auth-required', () => {
       securitySchemes: unknown;
       _meta: { securitySchemes: unknown };
     }>;
-    expect(tools).toHaveLength(7);
+    expect(tools).toHaveLength(8);
     expect(tools.find((tool) => tool.name === 'save_my_answer')?.securitySchemes).toEqual([
       { type: 'oauth2', scopes: ['daysynth.write'] },
     ]);

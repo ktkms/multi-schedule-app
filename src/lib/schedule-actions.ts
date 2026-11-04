@@ -2,6 +2,7 @@
 
 import { getAuthSession } from '@/lib/auth';
 import * as service from '@/lib/schedule-service';
+import { readDateFirstUserPreviews } from '@/lib/date-first-sync';
 
 export type {
   UserScheduleBounds,
@@ -50,7 +51,22 @@ export async function fetchUserAvailabilitySyncPreviewResult(
   ...args: WithoutUser<Parameters<typeof service.fetchUserAvailabilitySyncPreviewResult>>
 ) {
   const userId = (await getAuthSession())?.user?.id ?? null;
-  return service.fetchUserAvailabilitySyncPreviewResult(userId, ...args);
+  const [legacy, dateFirst] = await Promise.allSettled([
+    service.fetchUserAvailabilitySyncPreviewResult(userId, ...args),
+    userId ? readDateFirstUserPreviews(userId) : Promise.resolve([]),
+  ]);
+  if (legacy.status === 'rejected') throw legacy.reason;
+  return {
+    ...legacy.value,
+    ...(legacy.value.success
+      ? {
+          dateFirstEvents: dateFirst.status === 'fulfilled' ? dateFirst.value : [],
+          dateFirstPreviewFailed:
+            dateFirst.status === 'rejected' ||
+            dateFirst.value.some((event) => event.status === 'failed'),
+        }
+      : {}),
+  };
 }
 
 export async function applyUserAvailabilitySyncForEvent(

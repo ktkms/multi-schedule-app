@@ -488,13 +488,17 @@ const buildSyncPreviewContext = async (
 
   const { data: eventsData, error: eventsError } = await supabase
     .from('events')
-    .select('id,title,public_token,is_finalized')
+    .select('id,title,public_token,is_finalized,scheduling_mode')
     .in('id', scopedEventIds);
   if (eventsError) {
     if (options?.strict) throw new Error('イベント情報を取得できませんでした');
     console.error('イベント情報取得エラー:', eventsError);
   }
-  const eventsMap = new Map((eventsData ?? []).map((row) => [row.id, row]));
+  const eventsMap = new Map(
+    (eventsData ?? [])
+      .filter((row) => row.scheduling_mode !== 'date_first')
+      .map((row) => [row.id, row]),
+  );
 
   const overrides = await fetchSyncPreviewOverrideRows(
     supabase,
@@ -1058,7 +1062,7 @@ export async function syncUserAvailabilities({
 
   const { data: allLinks, error: linkError } = await supabase
     .from('user_event_links')
-    .select('event_id, participant_id')
+    .select('event_id, participant_id,event:events!inner(scheduling_mode)')
     .eq('user_id', userId);
 
   if (linkError) {
@@ -1067,13 +1071,9 @@ export async function syncUserAvailabilities({
   }
 
   const links = (allLinks ?? []).filter(
-    (
-      link,
-    ): link is {
-      event_id: string;
-      participant_id: string;
-    } => {
+    (link): link is typeof link & { participant_id: string } => {
       if (!link.participant_id) return false;
+      if (link.event?.scheduling_mode === 'date_first') return false;
       if (scope === 'current') {
         return currentEventId ? link.event_id === currentEventId : false;
       }

@@ -20,6 +20,9 @@ import type {
 import EventDetailsSectionSkeleton from '@/components/event-client/event-details-section-skeleton';
 import SyncWarningBanner from '@/components/sync/sync-warning-banner';
 import FinalizeStatusBanner from '@/components/event-client/finalize-status-banner';
+import { readDateFirstEvent } from '@/lib/date-first-service';
+import DateFirstEventView from '@/components/date-first/event';
+import { getAuthSession } from '@/lib/auth';
 
 interface EventPageProps {
   params: Promise<{
@@ -29,6 +32,7 @@ interface EventPageProps {
     sync_warning?: string;
     finalize_status?: string;
     action?: string;
+    saved_participant?: string;
   }>;
 }
 
@@ -106,6 +110,23 @@ export default async function EventPage({ params, searchParams }: EventPageProps
     }
     console.error('イベント取得エラー:', err);
     throw err;
+  }
+  if (event.scheduling_mode === 'date_first') {
+    const [data, myParticipantId, session] = await Promise.all([
+      readDateFirstEvent(public_id),
+      getMyLinkedParticipantIdForEvent(event.id),
+      getAuthSession(),
+    ]);
+    if (!data) notFound();
+    const saved = (await searchParams).saved_participant;
+    return (
+      <DateFirstEventView
+        data={data}
+        myParticipantId={myParticipantId}
+        signedIn={Boolean(session?.user?.id)}
+        initialParticipantId={data.participants.some((p) => p.id === saved) ? saved : undefined}
+      />
+    );
   }
   // 同時に走らせるデータ取得処理をここで起動しておく
   const eventDatesPromise = getEventDates(event.id);

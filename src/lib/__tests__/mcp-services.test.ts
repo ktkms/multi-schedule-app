@@ -35,7 +35,8 @@ describe('MCP本人の操作', () => {
     jest.clearAllMocks();
     (authPool.connect as jest.Mock).mockResolvedValue({ query, release });
     query.mockImplementation(async (sql: string) => {
-      if (sql.startsWith('SELECT id FROM public.events')) return { rows: [{ id: 'event' }] };
+      if (sql.startsWith('SELECT id') && sql.includes('FROM public.events'))
+        return { rows: [{ id: 'event' }] };
       if (sql.startsWith('SELECT id, start_time'))
         return {
           rows: [
@@ -223,7 +224,7 @@ describe('MCP本人の操作', () => {
       return original?.(sql, params);
     });
     const result = await saveMyAnswer('me', { ...input, use_account_schedule: true });
-    expect(result.account_seeded_slots).toBe(2);
+    expect(result).toMatchObject({ account_seeded_slots: 2 });
     const saved = query.mock.calls.find(([sql]) =>
       sql.startsWith('SELECT public.update_participant_availability'),
     );
@@ -254,6 +255,7 @@ describe('MCP本人の操作', () => {
   it('予定保存はプレビューでは書き込まず、適用時は指定枠の不可も保存する', async () => {
     const args = { public_token: input.public_token, event_date_ids: [dateId] };
     const preview = await saveMyAnswerToSchedule('me', args);
+    if (!('saved' in preview)) throw new Error('プレビューに失敗しました');
     expect(preview.saved).toBe(false);
     expect(query.mock.calls.some(([sql]) => sql.startsWith('INSERT'))).toBe(false);
     await expect(
@@ -277,6 +279,7 @@ describe('MCP本人の操作', () => {
   it('プレビュー後の回答変更を検出して予定の上書きを拒否する', async () => {
     const args = { public_token: input.public_token, event_date_ids: [dateId] };
     const preview = await saveMyAnswerToSchedule('me', args);
+    if (!('saved' in preview)) throw new Error('プレビューに失敗しました');
     const original = query.getMockImplementation();
     query.mockImplementation(async (sql: string, params: unknown[]) =>
       sql.startsWith('SELECT event_date_id')
@@ -310,6 +313,7 @@ describe('MCP本人の操作', () => {
     });
     const args = { public_token: input.public_token, event_date_ids: [dateId, otherDateId] };
     const preview = await saveMyAnswerToSchedule('me', args);
+    if (!('saved' in preview)) throw new Error('プレビューに失敗しました');
     await expect(
       saveMyAnswerToSchedule('me', {
         ...args,

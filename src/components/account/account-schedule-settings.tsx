@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
+import type { DateFirstUserPreview } from '@/lib/date-first-sync';
 import {
   applyUserAvailabilitySyncForEvent,
   fetchUserAvailabilitySyncPreviewResult,
@@ -271,6 +272,8 @@ export default function AccountScheduleSettings({
   const [syncMessageMap, setSyncMessageMap] = useState<Record<string, string>>({});
   const [isSyncPreviewLoading, setIsSyncPreviewLoading] = useState(false);
   const [syncPreviewMessage, setSyncPreviewMessage] = useState<string | null>(null);
+  const [dateFirstEvents, setDateFirstEvents] = useState<DateFirstUserPreview[]>([]);
+  const [dateFirstPreviewFailed, setDateFirstPreviewFailed] = useState(false);
   const [syncPreviewFailureReason, setSyncPreviewFailureReason] = useState<string | null>(null);
   const [syncApplyingEventIds, setSyncApplyingEventIds] = useState<Set<string>>(new Set());
   const [hasLoadedSyncPreview, setHasLoadedSyncPreview] = useState(false);
@@ -356,6 +359,8 @@ export default function AccountScheduleSettings({
     try {
       const result = await fetchUserAvailabilitySyncPreviewResult();
       const preview = result.events;
+      setDateFirstEvents(result.dateFirstEvents ?? []);
+      setDateFirstPreviewFailed(result.dateFirstPreviewFailed ?? false);
       if (!result.success) {
         applyPreviewState(createEmptySyncPreviewState());
         setSyncPreviewFailureReason(result.reason);
@@ -365,7 +370,7 @@ export default function AccountScheduleSettings({
       applyPreviewState(
         buildSyncPreviewState(preview, (event) => resolveInitialSyncPreviewWeekPage(event)),
       );
-      if (preview.length === 0) {
+      if (preview.length === 0 && (result.dateFirstEvents?.length ?? 0) === 0) {
         setSyncPreviewMessage(
           '変更対象のイベントはありません（ログイン後に回答したイベントが未登録、または差分がありません）',
         );
@@ -1027,6 +1032,40 @@ export default function AccountScheduleSettings({
           </p>
           {syncPreviewMessage && (
             <p className="text-base-content/60 text-sm">{syncPreviewMessage}</p>
+          )}
+          {dateFirstPreviewFailed && (
+            <p role="alert" className="text-error text-sm">
+              日付先行型の差分を取得できていないイベントがあります。再確認してください。
+            </p>
+          )}
+          {dateFirstEvents.length > 0 && (
+            <section className="space-y-3" aria-label="日付先行型の反映差分">
+              <h4 className="text-sm font-semibold">日付から決めるイベント</h4>
+              <ul className="space-y-3">
+                {dateFirstEvents.map((event) => (
+                  <li key={event.eventId} className="space-y-1">
+                    <Link
+                      className="link break-words text-sm"
+                      href={`/event/${event.publicToken}#account-answers`}
+                    >
+                      {event.title}
+                    </Link>
+                    <p className="text-base-content/65 text-xs">
+                      {event.status === 'failed'
+                        ? '差分の再確認が必要です'
+                        : `日付${event.changedDays}件・時間${event.changedSlots}件`}
+                      {event.isFinalized ? '（確定済み）' : ''}
+                      {event.status === 'requires_confirmation'
+                        ? '。コメント削除の確認が必要です。'
+                        : ''}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-base-content/65 text-xs">
+                各イベントで差分を確認して反映できます。手動回答は保持します。
+              </p>
+            </section>
           )}
 
           <div className="space-y-3">
