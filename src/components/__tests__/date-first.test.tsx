@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import DateFirstAnswerEditor from '@/components/date-first/answer';
 import DateFirstEventView from '@/components/date-first/event';
+import DateFirstTimeGrid from '@/components/date-first/time-grid';
 import {
   getDateFirstAnswer,
   getDateFirstDayDetails,
@@ -90,6 +91,26 @@ const reviewAndSave = async () => {
   );
   await waitFor(() => expect(saveDateFirst).toHaveBeenCalled());
 };
+it('表示の拡張だけでは回答を変更せず、当日0時から翌6時の境界で止める', () => {
+  const change = jest.fn();
+  render(<DateFirstTimeGrid id="grid" value={[]} baseRanges={[[0, 1440]]} onChange={change} />);
+  expect(screen.getAllByRole('button', { name: '表示を1時間早める' })).toHaveLength(2);
+  expect(screen.getAllByRole('button', { name: '表示を1時間早める' })[0]).toBeDisabled();
+  for (let i = 0; i < 6; i++)
+    fireEvent.click(screen.getAllByRole('button', { name: '表示を1時間遅く延ばす' }).at(-1)!);
+  expect(screen.getByRole('button', { name: '翌5:00〜翌6:00' })).toBeInTheDocument();
+  expect(screen.getAllByRole('button', { name: '表示を1時間遅く延ばす' }).at(-1)).toBeDisabled();
+  expect(change).not.toHaveBeenCalled();
+});
+
+it('既存回答を変更せず確認しても、全未回答と表示しない', () => {
+  render(<DateFirstAnswerEditor data={data} initialAnswer={answer} kind="days" />);
+  fireEvent.click(screen.getByLabelText(/利用規約/));
+  fireEvent.click(screen.getByTestId('date-first-answer-review'));
+  expect(screen.getByRole('dialog')).toHaveTextContent('日付の回答は変更しません。');
+  expect(screen.getByRole('dialog')).not.toHaveTextContent('日付はすべて未回答です。');
+});
+
 it('日付・コメントを複数展開でき、日付を閉じるとそのコメント展開だけリセットする', async () => {
   jest.mocked(getDateFirstDayDetails).mockResolvedValue([
     {

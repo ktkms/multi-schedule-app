@@ -492,7 +492,7 @@ export default function DateFirstAnswerEditor({
           <p className="break-words">{name.trim()}さん</p>
           {kind === 'days' ? (
             dayChanges.length === 0 ? (
-              <p>日付はすべて未回答です。</p>
+              <p>{baseline ? '日付の回答は変更しません。' : '日付はすべて未回答です。'}</p>
             ) : (
               dayChanges.map((change) => {
                 const day = data.days.find((d) => d.id === change.id)!;

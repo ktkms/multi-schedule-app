@@ -66,49 +66,53 @@ export default function DateFirstTimeGrid({
   const hasPartial = value.some(([lo, hi]) => lo % 60 !== 0 || hi % 60 !== 0);
   return (
     <div className="space-y-2" data-time-grid={id}>
-      <div className="flex justify-between gap-3">
-        <button
-          type="button"
-          className="btn btn-ghost btn-xs"
-          disabled={disabled || start <= 0}
-          aria-label="表示を1時間早める"
-          onClick={() => setStart(Math.max(0, start - 60))}
-        >
-          ＋ 前へ
-        </button>
-        <button
-          type="button"
-          className="btn btn-ghost btn-xs"
-          disabled={disabled || end >= 1800}
-          aria-label="表示を1時間遅く延ばす"
-          onClick={() => setEnd(Math.min(1800, end + 60))}
-        >
-          後へ ＋
-        </button>
-      </div>
-      <div
-        className="-mx-3 grid grid-cols-12 gap-0 sm:mx-0 sm:gap-0.5"
-        role="group"
-        aria-label="参加可能な時間"
-      >
-        {Array.from({ length: (end - start) / 60 }, (_, index) => start + index * 60).map((lo) => {
-          const full = coversDayInterval(value, lo, lo + 60),
-            partial = !full && value.some(([a, b]) => a < lo + 60 && b > lo);
+      <div className="-mx-3 space-y-1 sm:mx-0" role="group" aria-label="参加可能な時間">
+        {Array.from({ length: Math.ceil((end - start) / 720) }, (_, row) => {
+          const rowStart = start + row * 720;
           return (
-            <button
-              key={lo}
-              type="button"
-              {...drag.getCellProps(`${id}:${lo}`, { disabled })}
-              disabled={disabled}
-              className={`border-base-100 min-h-11 touch-none rounded-sm border text-xs tabular-nums ${full ? 'bg-primary text-primary-content' : partial ? 'bg-primary/20 underline' : 'bg-base-200'}`}
-              aria-label={`${formatDayMinute(lo)}〜${formatDayMinute(lo + 60)}`}
-              aria-pressed={partial ? 'mixed' : full}
-              onClick={(event) => {
-                if (event.detail === 0) drag.toggleKey(`${id}:${lo}`);
-              }}
-            >
-              {lo >= 1440 ? `翌${(lo - 1440) / 60}` : lo / 60}
-            </button>
+            <div key={row} data-time-row className="grid grid-cols-[repeat(14,minmax(0,1fr))]">
+              <button
+                type="button"
+                className="min-h-11 text-sm disabled:opacity-30"
+                disabled={disabled || start <= 0}
+                aria-label="表示を1時間早める"
+                onClick={() => setStart(Math.max(0, start - 60))}
+              >
+                ＋
+              </button>
+              {Array.from(
+                { length: Math.min(12, (end - rowStart) / 60) },
+                (_, index) => rowStart + index * 60,
+              ).map((lo) => {
+                const full = coversDayInterval(value, lo, lo + 60),
+                  partial = !full && value.some(([a, b]) => a < lo + 60 && b > lo);
+                return (
+                  <button
+                    key={lo}
+                    type="button"
+                    {...drag.getCellProps(`${id}:${lo}`, { disabled })}
+                    disabled={disabled}
+                    className={`border-base-100 min-h-11 touch-none rounded-sm border text-xs tabular-nums ${full ? 'bg-primary text-primary-content' : partial ? 'bg-primary/20 underline' : 'bg-base-200'}`}
+                    aria-label={`${formatDayMinute(lo)}〜${formatDayMinute(lo + 60)}`}
+                    aria-pressed={partial ? 'mixed' : full}
+                    onClick={(event) => {
+                      if (event.detail === 0) drag.toggleKey(`${id}:${lo}`);
+                    }}
+                  >
+                    {lo >= 1440 ? `翌${(lo - 1440) / 60}` : lo / 60}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                className="col-start-14 min-h-11 text-sm disabled:opacity-30"
+                disabled={disabled || end >= 1800}
+                aria-label="表示を1時間遅く延ばす"
+                onClick={() => setEnd(Math.min(1800, end + 60))}
+              >
+                ＋
+              </button>
+            </div>
           );
         })}
       </div>
