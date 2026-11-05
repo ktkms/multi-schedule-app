@@ -2,6 +2,20 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import TermsCheckbox from '@/components/terms/terms-checkbox';
 
 describe('TermsCheckbox', () => {
+  it('複数フォームを保持しても、それぞれのラベルが対応するチェック欄だけを操作する', () => {
+    const first = jest.fn(),
+      second = jest.fn();
+    const { container } = render(
+      <>
+        <TermsCheckbox isChecked={false} onChange={first} />
+        <TermsCheckbox isChecked={false} onChange={second} />
+      </>,
+    );
+    const labels = container.querySelectorAll('label');
+    fireEvent.click(labels[1]);
+    expect(second).toHaveBeenCalledWith(true);
+    expect(first).not.toHaveBeenCalled();
+  });
   test('ラベルクリックとキーボード操作に使える標準チェックボックスを表示する', () => {
     const onChange = jest.fn();
     render(<TermsCheckbox isChecked={false} onChange={onChange} id="terms-test" />);

@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import type { DateFirstEvent } from '@/lib/date-first-schema';
+import DateFirstAccount from '@/components/date-first/account';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import WeekNavigationBar from '@/components/week-navigation-bar';
@@ -19,6 +21,7 @@ import { addDays, endOfWeek, startOfWeek } from 'date-fns';
 type SyncReviewPageProps = {
   publicToken: string;
   currentEventId: string;
+  dateFirstTargets?: { data: DateFirstEvent; participantId: string }[];
   syncWarning?: 'partial' | null;
 };
 
@@ -157,10 +160,13 @@ const reconcileEventAfterApply = ({
   };
 };
 
+const emptyDateFirstTargets: { data: DateFirstEvent; participantId: string }[] = [];
+
 export default function SyncReviewPage({
   publicToken,
   currentEventId,
   syncWarning = null,
+  dateFirstTargets = emptyDateFirstTargets,
 }: SyncReviewPageProps) {
   const router = useRouter();
   const [syncPreviewEvents, setSyncPreviewEvents] = useState<UserAvailabilitySyncPreviewEvent[]>(
@@ -207,7 +213,7 @@ export default function SyncReviewPage({
         return;
       }
 
-      if (filteredPreview.length === 0) {
+      if (filteredPreview.length === 0 && dateFirstTargets.length === 0) {
         router.replace(backToEventPath);
         return;
       }
@@ -222,7 +228,7 @@ export default function SyncReviewPage({
     } finally {
       setIsSyncPreviewLoading(false);
     }
-  }, [backToEventPath, currentEventId, router]);
+  }, [backToEventPath, currentEventId, router, dateFirstTargets]);
 
   useEffect(() => {
     void loadSyncPreview();
@@ -233,6 +239,7 @@ export default function SyncReviewPage({
       !isSyncPreviewLoading &&
       !syncPreviewError &&
       syncPreviewEvents.length === 0 &&
+      dateFirstTargets.length === 0 &&
       syncApplyingEventIds.size === 0
     ) {
       router.replace(backToEventPath);
@@ -244,6 +251,7 @@ export default function SyncReviewPage({
     syncApplyingEventIds.size,
     syncPreviewError,
     syncPreviewEvents.length,
+    dateFirstTargets.length,
   ]);
 
   const handleApplyForEvent = useCallback(
@@ -382,6 +390,16 @@ export default function SyncReviewPage({
         </div>
       )}
 
+      {dateFirstTargets.map(({ data, participantId }) => (
+        <section className="surface mb-4 space-y-3 p-5 sm:p-6" key={data.event.id}>
+          <h2 className="section-heading">
+            <Link className="link" href={`/event/${data.event.token}`}>
+              {data.event.title}
+            </Link>
+          </h2>
+          <DateFirstAccount data={data} myParticipantId={participantId} />
+        </section>
+      ))}
       <div className="space-y-3">
         {syncPreviewEvents.map((event) => {
           const matrix = buildSyncPreviewMatrix(event);
