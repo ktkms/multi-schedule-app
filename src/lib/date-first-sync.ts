@@ -11,6 +11,7 @@ import { getDateFirstSyncChanges } from './date-first-sync-diff';
 export type DateFirstUserPreview = {
   eventId: string;
   publicToken: string;
+  participantId?: string;
   title: string;
   isFinalized: boolean;
   status: 'ready' | 'requires_confirmation' | 'failed';
@@ -84,6 +85,7 @@ export async function readDateFirstUserPreviews(
         if (days.length + times.length === 0) continue;
         events.push({
           ...base,
+          participantId: preview.participant,
           status: preview.cleared_comments.length ? 'requires_confirmation' : 'ready',
           changedDays: days.length,
           changedSlots: times.length,

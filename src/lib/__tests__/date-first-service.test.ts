@@ -1,5 +1,9 @@
 import { authPool } from '@/lib/auth';
-import { dateFirstFailure, executeDateFirst } from '@/lib/date-first-service';
+import {
+  dateFirstFailure,
+  executeDateFirst,
+  readDateFirstScheduleDraft,
+} from '@/lib/date-first-service';
 import { dateFirstCommandSchema, formatDayMinute } from '@/lib/date-first-schema';
 
 jest.mock('@/lib/auth', () => ({ authPool: { connect: jest.fn() } }));
@@ -19,6 +23,60 @@ const client = () => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
+});
+
+it('予定の取り込みは本人の編集対象だけに許可し、保存しない', async () => {
+  const db = client();
+  const preview = {
+    participant: id,
+    days: [{ id, status: 'yes', intervals: [] }],
+    times: [],
+    cleared_comments: [],
+    fingerprint: 'a'.repeat(64),
+  };
+  db.query.mockResolvedValue({ rows: [{ value: preview }] } as never);
+  jest.mocked(authPool.connect).mockResolvedValue(db as never);
+  expect(await readDateFirstScheduleDraft('public-token-123', 'session-owner', id)).toEqual({
+    days: preview.days,
+    times: [],
+  });
+  await expect(
+    readDateFirstScheduleDraft(
+      'public-token-123',
+      'session-owner',
+      '22222222-2222-4222-8222-222222222222',
+    ),
+  ).rejects.toThrow('not_linked');
+  await expect(readDateFirstScheduleDraft('public-token-123', 'session-owner')).rejects.toThrow(
+    'not_linked',
+  );
+  expect(db.query.mock.calls.every(([sql]) => String(sql).includes('sync_preview'))).toBe(true);
+  expect(db.release).toHaveBeenCalledTimes(3);
+});
+
+it('未紐付けの予定候補は新規回答だけに返し、任意の参加者への取り込みを拒否する', async () => {
+  const db = client();
+  db.query.mockResolvedValue({
+    rows: [
+      {
+        value: {
+          participant: null,
+          days: [],
+          times: [],
+          cleared_comments: [],
+          fingerprint: 'a'.repeat(64),
+        },
+      },
+    ],
+  } as never);
+  jest.mocked(authPool.connect).mockResolvedValue(db as never);
+  expect(await readDateFirstScheduleDraft('public-token-123', 'session-owner')).toEqual({
+    days: [],
+    times: [],
+  });
+  await expect(readDateFirstScheduleDraft('public-token-123', 'session-owner', id)).rejects.toThrow(
+    'not_linked',
+  );
 });
 
 it('本人ID・sourceの自己申告と不正な日跨ぎをDB接続前に拒否する', async () => {

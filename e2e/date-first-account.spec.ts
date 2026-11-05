@@ -23,7 +23,6 @@ test('本人リンク・予定反映の削除確認・正式時間回答の予�
       page.waitForEvent('load'),
       page.getByRole('dialog').getByRole('button', { name, exact: true }).click(),
     ]);
-    await expect(page.getByTestId('date-first-event')).toBeVisible();
   };
   try {
     const event = (
@@ -76,17 +75,36 @@ test('本人リンク・予定反映の削除確認・正式時間回答の予�
       [user, event.id],
     );
     await page.goto(`/event/${event.token}`);
-    const account = page.getByRole('region', { name: 'アカウント予定の反映' });
-    await account.getByLabel('アカウントに紐付ける回答').selectOption(participant);
-    await account.getByRole('button', { name: '紐付けを確認' }).click();
-    await confirmReload('自分の回答として紐付ける');
-    await expect(account.getByRole('button', { name: '予定を反映する差分を確認' })).toBeVisible();
-    await account.getByRole('button', { name: '予定を反映する差分を確認' }).click();
-    await expect(page.getByRole('dialog')).toContainText('未回答 → △');
+    await page.getByTestId('event-answer-link-open').click();
+    await page.getByTestId('event-answer-link-select').selectOption(participant);
+    await page.getByTestId('event-answer-link-link').click();
+    await expect(page.getByRole('dialog')).toContainText('回答をアカウントに紐づけました');
+    await page.getByTestId('event-answer-link-close').click();
+    await page.goto(`/event/${event.token}/input/schedule-review`);
+    await expect(page.getByRole('heading', { name: '予定から回答への変更を確認' })).toBeVisible();
+    await page.getByRole('button', { name: '変更内容を確認して反映' }).click();
+    await expect(page.getByRole('dialog', { name: '予定から回答へ反映' })).toContainText(
+      '未回答 → △',
+    );
     await confirmReload('この差分を反映');
-    await expect(page.getByRole('dialog')).toBeHidden();
-    await page.goto(`/event/${event.token}/input?participant_id=${participant}`);
+    const readDay = async () =>
+      (
+        await db.query(
+          'SELECT status,source,comment FROM event_day_responses WHERE participant_id=$1 AND candidate_day_id=$2',
+          [participant, days[1].id],
+        )
+      ).rows;
+    expect(await readDay()).toMatchObject([{ status: 'maybe', source: 'account' }]);
+    await page.goto(`/event/${event.token}/input?participant_id=${participant}&kind=days`);
+    await page.getByRole('button', { name: '自分の予定を使う', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText(
+      '入力に反映する変更はありません。入力済みの回答は保持しました。',
+    );
     const day = page.getByTestId(`day-answer-${days[1].id}`);
+    await expect(day.getByTestId(`day-${days[1].id}-maybe`)).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     await day.getByRole('button', { name: /のコメント/ }).click();
     await day.getByRole('textbox').fill('自動回答のコメント');
     await page.getByLabel(/利用規約/).check();
@@ -95,14 +113,9 @@ test('本人リンク・予定反映の削除確認・正式時間回答の予�
       .getByRole('dialog')
       .getByRole('button', { name: 'この内容で保存', exact: true })
       .click();
+    await expect(page).toHaveURL(/\/input\/complete\?participant_id=[a-f0-9-]+&kind=days$/);
+    await page.getByRole('link', { name: 'イベント結果を見る', exact: true }).click();
     await expect(page.getByTestId('date-first-event')).toBeVisible();
-    const readDay = async () =>
-      (
-        await db.query(
-          'SELECT status,source,comment FROM event_day_responses WHERE participant_id=$1 AND candidate_day_id=$2',
-          [participant, days[1].id],
-        )
-      ).rows;
     expect(await readDay()).toMatchObject([
       { status: 'maybe', source: 'account', comment: '自動回答のコメント' },
     ]);
@@ -110,20 +123,28 @@ test('本人リンク・予定反映の削除確認・正式時間回答の予�
       "UPDATE user_schedule_blocks SET availability=false WHERE user_id=$1 AND start_time='2098-12-08 10:00Z'",
       [user],
     );
-    await account.getByRole('button', { name: '予定を反映する差分を確認' }).click();
-    await expect(page.getByRole('dialog')).toContainText('コメント');
+    await page.goto(`/event/${event.token}/input/schedule-review`);
+    await expect(page.getByRole('heading', { name: '予定から回答への変更を確認' })).toBeVisible();
+    await page.getByRole('button', { name: '変更内容を確認して反映' }).click();
+    await expect(page.getByRole('dialog', { name: '予定から回答へ反映' })).toContainText(
+      '自動回答のコメント',
+    );
     await page.getByRole('dialog').getByRole('button', { name: 'キャンセル', exact: true }).click();
     expect(await readDay()).toHaveLength(1);
-    await account.getByRole('button', { name: '予定を反映する差分を確認' }).click();
+    await page.getByRole('button', { name: '変更内容を確認して反映' }).click();
+    await expect(page.getByRole('dialog', { name: '予定から回答へ反映' })).toContainText(
+      '自動回答のコメント',
+    );
     await confirmReload('この差分を反映');
-    await expect(page.getByRole('dialog')).toBeHidden();
     expect(await readDay()).toHaveLength(0);
-    await account.getByRole('button', { name: '時間の回答を自分の予定へ保存' }).click();
+    await page.goto(
+      `/event/${event.token}/input/complete?participant_id=${participant}&kind=times`,
+    );
+    await page.getByRole('button', { name: '時間の回答を自分の予定へ保存' }).click();
     await expect(page.getByRole('dialog').getByRole('checkbox')).toHaveCount(1);
     await page.getByRole('dialog').getByRole('button', { name: '予定との差分を確認' }).click();
     await expect(page.getByRole('dialog')).toContainText('10:00〜10:30');
     await confirmReload('この内容で予定を更新');
-    await expect(page.getByRole('dialog')).toBeHidden();
     expect(
       (
         await db.query(

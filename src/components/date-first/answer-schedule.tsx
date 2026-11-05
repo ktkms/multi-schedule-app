@@ -91,7 +91,7 @@ export default function DateFirstAnswerSchedule({
         }}
       >
         <div className="mt-4 space-y-3">
-          <p className="text-sm">日付記号と未回答は保存しません。</p>
+          <p className="text-sm">日付の回答と未回答は保存しません。</p>
           {answer?.times
             .filter((t) => t.availability !== null)
             .map((row) => {

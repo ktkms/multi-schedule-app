@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import useSelectionDragController from '@/hooks/useSelectionDragController';
 import { candidateDayLabel } from '@/lib/date-first-ui';
 
 /** 暦日をそのまま選択し、端末由来のUTC変換を保存値へ持ち込まない。 */
@@ -13,6 +14,16 @@ export default function DateFirstDatePicker({
   onChange: (days: string[]) => void;
   existing?: string[];
 }) {
+  const monthId = useId();
+  const container = useRef<HTMLDivElement>(null);
+  const working = useRef(value);
+  const active = useRef(false);
+  useEffect(() => {
+    if (!active.current) working.current = value;
+  }, [value]);
+  const onDragEnd = useCallback(() => {
+    active.current = false;
+  }, []);
   const [month, setMonth] = useState(
     () =>
       value[0]?.slice(0, 7) ??
@@ -22,31 +33,60 @@ export default function DateFirstDatePicker({
   const last = new Date(first);
   last.setUTCMonth(last.getUTCMonth() + 1, 0);
   const count = last.getUTCDate();
+  const dateKeys = Array.from(
+    { length: count },
+    (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`,
+  );
+  const drag = useSelectionDragController({
+    isSelected: (key) => value.includes(key),
+    onDragStart: () => {
+      active.current = true;
+      working.current = value;
+    },
+    onDragEnd,
+    applySelection: (keys, selected) => {
+      const next = new Set(active.current ? working.current : value);
+      for (const key of keys) {
+        if (existing.includes(key) || key >= '9999-12-31') continue;
+        if (!selected) next.delete(key);
+        else if (next.size + existing.length < 90) next.add(key);
+      }
+      working.current = [...next].sort();
+      onChange(working.current);
+    },
+    shouldIgnorePointerEnter: () => !active.current,
+    getKeyFromElement: (element) =>
+      container.current?.contains(element)
+        ? (element?.closest<HTMLElement>('[data-selection-key]')?.dataset.selectionKey ?? null)
+        : null,
+    disableBodyScroll: true,
+  });
   const move = (amount: number) => {
     const date = new Date(first);
     date.setUTCMonth(date.getUTCMonth() + amount);
     setMonth(date.toISOString().slice(0, 7));
   };
   return (
-    <div className="space-y-4" data-testid="date-first-date-picker">
+    <div ref={container} className="space-y-4" data-testid="date-first-date-picker">
       <div className="flex items-center justify-between gap-3">
         <button
           type="button"
           className="btn btn-ghost btn-sm"
           onClick={() => move(-1)}
           aria-label="前の月"
-          disabled={month <= '0001-01'}
+          disabled={drag.isDragging || month <= '0001-01'}
         >
           前月
         </button>
-        <label className="sr-only" htmlFor="candidate-month">
+        <label className="sr-only" htmlFor={monthId}>
           表示月
         </label>
         <input
-          id="candidate-month"
+          id={monthId}
           type="month"
           className="input w-40"
           value={month}
+          disabled={drag.isDragging}
           min="0001-01"
           max="9999-12"
           onChange={(e) => {
@@ -58,7 +98,7 @@ export default function DateFirstDatePicker({
           className="btn btn-ghost btn-sm"
           onClick={() => move(1)}
           aria-label="次の月"
-          disabled={month >= '9999-12'}
+          disabled={drag.isDragging || month >= '9999-12'}
         >
           翌月
         </button>
@@ -72,26 +112,26 @@ export default function DateFirstDatePicker({
         {Array.from({ length: first.getUTCDay() }, (_, i) => (
           <span key={`blank-${i}`} />
         ))}
-        {Array.from({ length: count }, (_, i) => {
-          const date = `${month}-${String(i + 1).padStart(2, '0')}`,
-            selected = value.includes(date),
+        {dateKeys.map((date, i) => {
+          const selected = value.includes(date),
             registered = existing.includes(date);
+          const disabled =
+            registered ||
+            date >= '9999-12-31' ||
+            (!selected && value.length + existing.length >= 90);
           return (
             <button
               key={date}
               type="button"
+              {...drag.getCellProps(date, { disabled })}
               data-testid={`candidate-date-${date}`}
-              className={`btn px-0 ${selected ? 'btn-primary' : 'btn-ghost'}`}
+              className={`btn touch-none px-0 ${selected ? 'btn-primary' : 'btn-ghost'}`}
               aria-pressed={selected}
               aria-label={`${candidateDayLabel(date)}${registered ? ' 追加済み' : ''}`}
-              disabled={
-                registered ||
-                date >= '9999-12-31' ||
-                (!selected && value.length + existing.length >= 90)
-              }
-              onClick={() =>
-                onChange(selected ? value.filter((d) => d !== date) : [...value, date].sort())
-              }
+              disabled={disabled}
+              onClick={(event) => {
+                if (event.detail === 0 && !disabled) drag.toggleKey(date);
+              }}
             >
               {i + 1}
             </button>

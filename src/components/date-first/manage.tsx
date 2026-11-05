@@ -12,6 +12,7 @@ import {
 } from '@/lib/date-first-ui';
 import ConfirmationModal from '@/components/common/confirmation-modal';
 import DateFirstDatePicker from './date-picker';
+import DateFirstTimeInput from './time-input';
 
 /** 候補の構造変更を回答保存から分け、解除される確定日時を同じ確認で提示する。 */
 export function DateFirstConfiguration({ data }: { data: DateFirstEvent }) {
@@ -149,30 +150,22 @@ export function DateFirstConfiguration({ data }: { data: DateFirstEvent }) {
               ))}
           </select>
         </label>
-        <div className="flex flex-wrap gap-3">
-          <label className="space-y-2">
-            <span className="block">開始</span>
-            <input
-              data-testid="date-first-slot-start"
-              className="input w-32"
-              value={start}
-              onChange={(e) => setStart(e.target.value)}
-              placeholder="18:00"
-            />
-          </label>
-          <label className="space-y-2">
-            <span className="block">終了</span>
-            <input
-              data-testid="date-first-slot-end"
-              className="input w-32"
-              value={end}
-              onChange={(e) => setEnd(e.target.value)}
-              placeholder="翌2:00"
-            />
-          </label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <DateFirstTimeInput
+            label="開始"
+            value={start}
+            onChange={setStart}
+            inputTestId="date-first-slot-start"
+          />
+          <DateFirstTimeInput
+            label="終了"
+            value={end}
+            onChange={setEnd}
+            inputTestId="date-first-slot-end"
+          />
         </div>
         <p className="text-base-content/65 text-sm">
-          翌朝は「翌2:00」のように指定できます（翌6:00まで）。
+          翌朝までの候補は、終了の日付を「翌日」にして指定できます（翌6:00まで）。
         </p>
         <label className="block space-y-2">
           <span>候補の区切り</span>
@@ -281,8 +274,8 @@ export function DateFirstConfiguration({ data }: { data: DateFirstEvent }) {
               )}
               {unfinalized.length > 0 && (
                 <p className="text-warning">
-                  日時確定も解除：{dayIntervalText(unfinalized.map((s) => [s.start, s.end]))}
-                  。日付の確定は維持します。
+                  日時確定を解除：{dayIntervalText(unfinalized.map((s) => [s.start, s.end]))}
+                  （日付の確定は維持）
                 </p>
               )}
             </>

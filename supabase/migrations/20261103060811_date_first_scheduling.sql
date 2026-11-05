@@ -755,7 +755,9 @@ SELECT jsonb_build_object(
     'maybe',(SELECT count(*) FROM public.event_day_responses r WHERE r.candidate_day_id=c.id AND r.status='maybe'),
     'no',(SELECT count(*) FROM public.event_day_responses r WHERE r.candidate_day_id=c.id AND r.status='no'),
     'unanswered',(SELECT count(*) FROM public.participants p WHERE p.event_id=e.id)-
-      (SELECT count(*) FROM public.event_day_responses r WHERE r.candidate_day_id=c.id AND r.status IS NOT NULL)
+      (SELECT count(*) FROM public.event_day_responses r WHERE r.candidate_day_id=c.id AND r.status IS NOT NULL),
+    'hasComment',EXISTS(SELECT 1 FROM public.event_day_responses r
+      WHERE r.candidate_day_id=c.id AND r.status IS NOT NULL AND r.comment ~ '[^[:space:]　]')
     ) ORDER BY c.local_date,c.id) FROM public.event_candidate_days c WHERE c.event_id=e.id),'[]'::jsonb),
   'slots',coalesce((SELECT jsonb_agg(jsonb_build_object('id',d.id,'dayId',d.candidate_day_id,
     'start',extract(epoch FROM(d.start_time-c.local_date::timestamp))::integer/60,

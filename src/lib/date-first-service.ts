@@ -6,9 +6,34 @@ import {
   dateFirstCommandSchema,
   dateFirstEventSchema,
   dateFirstAnswerSchema,
+  dateFirstSyncPreviewSchema,
   dayDetailsSchema,
   type DateFirstCommand,
 } from './date-first-schema';
+
+/** 本人の予定を入力候補として読み出す。保存・紐付けは変更しない。 */
+export async function readDateFirstScheduleDraft(
+  token: string,
+  userId: string,
+  participantId?: string,
+) {
+  const db = await authPool.connect();
+  try {
+    const raw = await value(db, "SELECT date_first.sync_preview($1,$2,'[]'::jsonb,true) AS value", [
+      userId,
+      token,
+    ]);
+    const draft = dateFirstSyncPreviewSchema
+      .extend({ participant: z.uuid().nullable() })
+      .parse(raw);
+    if ((draft.participant ?? undefined) !== participantId) {
+      throw new Error('not_linked');
+    }
+    return { days: draft.days, times: draft.times };
+  } finally {
+    db.release();
+  }
+}
 
 const messages: Record<string, string> = {
   stale_revision: '他の変更が保存されています。最新の内容を確認してから保存してください。',

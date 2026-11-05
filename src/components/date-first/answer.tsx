@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   useTransition,
@@ -10,7 +11,11 @@ import {
 import { Circle, MessageSquare, Triangle, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { z } from 'zod';
-import { getDateFirstAnswer, saveDateFirst } from '@/lib/date-first-actions';
+import {
+  getDateFirstAnswer,
+  getDateFirstScheduleDraft,
+  saveDateFirst,
+} from '@/lib/date-first-actions';
 import {
   type DateFirstAnswer,
   type DateFirstEvent,
@@ -37,6 +42,8 @@ type DraftDay = {
 };
 const symbol = (value: Status) =>
   value === 'yes' ? '○' : value === 'maybe' ? '△' : value === 'no' ? '×' : '未回答';
+const sameIntervals = (a: DayInterval[], b: DayInterval[]) =>
+  a.length === b.length && a.every(([lo, hi], i) => lo === b[i][0] && hi === b[i][1]);
 const initialDays = (
   data: DateFirstEvent,
   answer: DateFirstAnswer | null,
@@ -63,21 +70,28 @@ export default function DateFirstAnswerEditor({
   data,
   initialAnswer,
   kind,
+  signedIn = false,
+  canUseSchedule = false,
 }: {
   data: DateFirstEvent;
   initialAnswer: DateFirstAnswer | null;
   kind: 'days' | 'times';
+  signedIn?: boolean;
+  canUseSchedule?: boolean;
 }) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
+  const [scheduleMessage, setScheduleMessage] = useState('');
   useEffect(() => setReady(true), []);
   const [baseline, setBaseline] = useState(initialAnswer),
     [name, setName] = useState(initialAnswer?.name ?? '');
   const [days, setDays] = useState(() => initialDays(data, initialAnswer));
   const [times, setTimes] = useState<Record<string, boolean | null>>({});
-  const [expanded, setExpanded] = useState(
-    () => new Set(initialAnswer?.days.filter((d) => d.status === 'maybe').map((d) => d.id)),
-  );
+  const [timeEditor, setTimeEditor] = useState<{
+    dayIds: string[];
+    intervals: DayInterval[] | null;
+    edited: boolean;
+  } | null>(null);
   const [comments, setComments] = useState<Set<string>>(new Set());
   const [selectedDay, setSelectedDay] = useState(data.days.find((d) => d.target)?.id ?? '');
   const [error, setError] = useState(''),
@@ -86,10 +100,13 @@ export default function DateFirstAnswerEditor({
   const [latest, setLatest] = useState<DateFirstAnswer | null>(null),
     [leaving, setLeaving] = useState<string | null>(null);
   const [showProposals, setShowProposals] = useState(false),
-    [dragging, setDragging] = useState(false);
+    [dragDays, setDragDays] = useState<Record<string, DraftDay> | null>(null);
+  const dragging = dragDays !== null;
   const [pending, startTransition] = useTransition();
+  const rowMotion = useRef(new Map<string, { height: number; animation: Animation | null }>());
   const request = useRef<string | null>(null),
     saved = useRef(false),
+    commentFocus = useRef<string | null>(null),
     container = useRef<HTMLDivElement>(null);
   const gesture = useRef<null | {
     pointerId: number;
@@ -98,9 +115,47 @@ export default function DateFirstAnswerEditor({
     x: number;
     y: number;
     moved: boolean;
+    dayIds: Set<string>;
     original: Record<string, DraftDay>;
     next: Record<string, DraftDay>;
   }>(null);
+  useEffect(() => {
+    const rows = rowMotion.current;
+    return () => {
+      for (const row of rows.values()) row.animation?.cancel();
+    };
+  }, []);
+  useLayoutEffect(() => {
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    for (const element of container.current?.querySelectorAll<HTMLElement>('[data-answer-day]') ??
+      []) {
+      const id = element.dataset.answerDay!;
+      const previous = rowMotion.current.get(id);
+      if (dragging && !reduced) {
+        previous?.animation?.pause();
+        continue;
+      }
+      const animated =
+        previous?.animation?.playState === 'running' || previous?.animation?.playState === 'paused';
+      const from = animated ? element.getBoundingClientRect().height : previous?.height;
+      previous?.animation?.cancel();
+      const height = element.getBoundingClientRect().height;
+      const animation =
+        !reduced &&
+        from !== undefined &&
+        Math.abs(from - height) > 1 &&
+        typeof element.animate === 'function'
+          ? element.animate(
+              [
+                { height: `${from}px`, clipPath: 'inset(0 -0.75rem)' },
+                { height: `${height}px`, clipPath: 'inset(0 -0.75rem)' },
+              ],
+              { duration: 160, easing: 'ease-out' },
+            )
+          : null;
+      rowMotion.current.set(id, { height, animation });
+    }
+  }, [days, comments, dragging]);
   const dayChanges = Object.entries(days)
     .filter(([, d]) => d.statusDirty || d.commentDirty || d.intervalsDirty)
     .map(([id, d]) => ({
@@ -110,7 +165,35 @@ export default function DateFirstAnswerEditor({
       ...(d.status === 'maybe' && d.intervalsDirty ? { intervals: d.intervals } : {}),
     }));
   const timeChanges = Object.entries(times).map(([id, availability]) => ({ id, availability }));
-  const dirty = dayChanges.length > 0 || timeChanges.length > 0 || name !== (baseline?.name ?? '');
+  const timeEditorDirty =
+    timeEditor !== null &&
+    timeEditor.intervals !== null &&
+    timeEditor.dayIds.some((id) => !sameIntervals(days[id].intervals, timeEditor.intervals!));
+  const dirty =
+    dayChanges.length > 0 ||
+    timeChanges.length > 0 ||
+    name !== (baseline?.name ?? '') ||
+    timeEditorDirty;
+  const maybeDays = data.days.filter(
+    (day) => (dragDays?.[day.id] ?? days[day.id]).status === 'maybe',
+  );
+  const commonIntervals = (dayIds: string[]) => {
+    const first = days[dayIds[0]]?.intervals ?? [];
+    return dayIds.every((id) => sameIntervals(days[id].intervals, first)) ? first : null;
+  };
+  const applyTimeEditor = () => {
+    if (!timeEditor || timeEditor.intervals === null || timeEditor.dayIds.length === 0) return;
+    const intervals = timeEditor.intervals;
+    setDays((old) => {
+      const next = { ...old };
+      for (const id of timeEditor.dayIds) {
+        if (next[id].status === 'maybe' && !sameIntervals(next[id].intervals, intervals))
+          next[id] = { ...next[id], intervals, intervalsDirty: true };
+      }
+      return next;
+    });
+    setTimeEditor(null);
+  };
   useEffect(() => {
     if (!dirty) return;
     const unload = (event: BeforeUnloadEvent) => {
@@ -159,6 +242,7 @@ export default function DateFirstAnswerEditor({
       if (!id || !active.next[id]) return;
       if (id !== active.id) active.moved = true;
       if (!active.moved) return;
+      active.dayIds.add(id);
       active.next = {
         ...active.next,
         [id]: { ...active.next[id], status: active.status, statusDirty: true },
@@ -174,12 +258,16 @@ export default function DateFirstAnswerEditor({
       else if (!active.moved && active.original[active.id].status === active.status)
         next = { ...next, [active.id]: { ...next[active.id], status: null, statusDirty: true } };
       setDays(next);
-      setExpanded(
-        (old) =>
-          new Set([...old, ...Object.keys(next).filter((id) => next[id].status === 'maybe')]),
-      );
+      if (!cancelled && active.moved && active.status === 'maybe' && active.dayIds.size > 1) {
+        const dayIds = [...active.dayIds];
+        const first = next[dayIds[0]].intervals;
+        const intervals = dayIds.every((id) => sameIntervals(next[id].intervals, first))
+          ? first
+          : null;
+        setTimeEditor({ dayIds, intervals, edited: false });
+      }
       gesture.current = null;
-      setDragging(false);
+      setDragDays(null);
     };
     const up = (event: PointerEvent) => finish(false, event),
       cancel = (event: PointerEvent) => finish(true, event),
@@ -211,10 +299,11 @@ export default function DateFirstAnswerEditor({
       x: event.clientX,
       y: event.clientY,
       moved: false,
+      dayIds: new Set([id]),
       original: days,
       next,
     };
-    setDragging(true);
+    setDragDays(days);
     setDays(next);
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
@@ -231,6 +320,61 @@ export default function DateFirstAnswerEditor({
       days[slot.dayId]?.status === 'maybe' &&
       coversDayInterval(days[slot.dayId].intervals, slot.start, slot.end),
   );
+  const useSchedule = () =>
+    startTransition(async () => {
+      setScheduleMessage('');
+      try {
+        const result = await getDateFirstScheduleDraft(data.event.token, baseline?.id);
+        if (!result.success) {
+          setScheduleMessage(result.message);
+          return;
+        }
+        const dayCandidates = result.draft.days.filter((row) => {
+          const current = days[row.id];
+          return (
+            current &&
+            !current.statusDirty &&
+            !current.intervalsDirty &&
+            !current.commentDirty &&
+            row.status !== null &&
+            (current.status !== row.status || !sameIntervals(current.intervals, row.intervals))
+          );
+        });
+        const timeCandidates = result.draft.times.filter(
+          (row) =>
+            row.availability !== null &&
+            !Object.hasOwn(times, row.id) &&
+            timeValue(row.id) !== row.availability,
+        );
+        if (kind === 'days')
+          setDays((old) => {
+            const next = { ...old };
+            for (const row of dayCandidates)
+              next[row.id] = {
+                ...old[row.id],
+                status: row.status,
+                intervals: row.intervals,
+                statusDirty: true,
+                intervalsDirty: true,
+              };
+            return next;
+          });
+        else
+          setTimes((old) => ({
+            ...Object.fromEntries(timeCandidates.map((row) => [row.id, row.availability])),
+            ...old,
+          }));
+        setScheduleMessage(
+          (kind === 'days' ? dayCandidates.length : timeCandidates.length) > 0
+            ? '予定を取り込みました。内容を確認・修正してから回答を保存してください。'
+            : '入力に反映する変更はありません。入力済みの回答は保持しました。',
+        );
+      } catch {
+        setScheduleMessage(
+          '予定を取得できませんでした。入力を保持しています。もう一度お試しください。',
+        );
+      }
+    });
   const save = () =>
     startTransition(async () => {
       setError('');
@@ -258,7 +402,9 @@ export default function DateFirstAnswerEditor({
         }
         const value = z.object({ id: z.uuid() }).parse(result.value);
         saved.current = true;
-        router.push(`/event/${data.event.token}?saved_participant=${value.id}`);
+        router.push(
+          `/event/${data.event.token}/input/complete?participant_id=${value.id}&kind=${kind}`,
+        );
       } catch {
         setError(
           '保存結果を確認できませんでした。入力を保持しています。同じ内容で再試行してください。',
@@ -272,6 +418,36 @@ export default function DateFirstAnswerEditor({
         <h2 className="page-title">{kind === 'days' ? '日付を回答' : '時間を回答'}</h2>
         {baseline && <p className="break-words">「{baseline.name}」さんの回答を編集</p>}
       </header>
+      <div className="space-y-2">
+        {signedIn ? (
+          canUseSchedule ? (
+            <button
+              type="button"
+              className="btn btn-outline"
+              disabled={pending || !ready}
+              onClick={useSchedule}
+            >
+              自分の予定を使う
+            </button>
+          ) : (
+            <p className="text-base-content/65 text-sm">
+              自分の予定を使うには、イベントページで自分の回答を紐付けてから編集してください。
+            </p>
+          )
+        ) : (
+          <a
+            className="link inline-flex min-h-11 items-center text-sm"
+            href={`/auth/signin?callbackUrl=${encodeURIComponent(`/event/${data.event.token}/input${baseline ? `?participant_id=${baseline.id}&kind=${kind}` : `?kind=${kind}`}`)}`}
+          >
+            ログインして自分の予定を使う
+          </a>
+        )}
+        {scheduleMessage && (
+          <p role="status" className="text-sm">
+            {scheduleMessage}
+          </p>
+        )}
+      </div>
       {error && (
         <p role="alert" className="text-error">
           {error}
@@ -296,17 +472,19 @@ export default function DateFirstAnswerEditor({
             />
           </label>
           {kind === 'days' ? (
-            <div ref={container} className="space-y-4">
-              <p className="text-base-content/65 text-sm">
-                ○は当日0〜24時を通して参加可能な場合に選びます。翌朝の条件は△の時間で指定できます。
-              </p>
+            <div ref={container} className="max-w-xl space-y-4">
               {data.days.map((day) => {
-                const draft = days[day.id],
-                  open = expanded.has(day.id) && (dragging || draft.status === 'maybe');
+                const draft = days[day.id];
+                const displayStatus = (dragDays?.[day.id] ?? draft).status;
                 return (
-                  <section key={day.id} className="space-y-2" data-testid={`day-answer-${day.id}`}>
+                  <section
+                    key={day.id}
+                    className="space-y-2"
+                    data-answer-day={day.id}
+                    data-testid={`day-answer-${day.id}`}
+                  >
                     <div className="flex items-center gap-2">
-                      <span className="min-w-0 flex-1 text-sm font-medium">
+                      <span className="min-w-0 flex-1 text-sm font-medium sm:w-36 sm:flex-none">
                         {candidateDayLabel(day.date)}
                       </span>
                       <div className="flex gap-1">
@@ -327,8 +505,6 @@ export default function DateFirstAnswerEditor({
                                 if (e.detail !== 0) return;
                                 const next = draft.status === status ? null : status;
                                 changeDay(day.id, { status: next, statusDirty: true });
-                                if (next === 'maybe')
-                                  setExpanded((old) => new Set([...old, day.id]));
                               }}
                             >
                               <Icon size={18} aria-hidden="true" />
@@ -341,15 +517,17 @@ export default function DateFirstAnswerEditor({
                         className="btn btn-ghost relative min-h-11 w-10 px-0"
                         aria-label={`${candidateDayLabel(day.date)}のコメント${draft.comment ? '（入力済み）' : ''}`}
                         aria-expanded={comments.has(day.id)}
-                        disabled={draft.status === null || dragging}
-                        onClick={() =>
+                        disabled={displayStatus === null}
+                        onClick={() => {
+                          if (dragging || draft.status === null) return;
+                          if (!comments.has(day.id)) commentFocus.current = day.id;
                           setComments((old) => {
                             const next = new Set(old);
                             if (next.has(day.id)) next.delete(day.id);
                             else next.add(day.id);
                             return next;
-                          })
-                        }
+                          });
+                        }}
                       >
                         <MessageSquare size={18} aria-hidden="true" />
                         {draft.comment && (
@@ -357,28 +535,35 @@ export default function DateFirstAnswerEditor({
                         )}
                       </button>
                     </div>
-                    {open && (
+                    {displayStatus === 'maybe' && (
                       <DateFirstTimeGrid
                         id={day.id}
                         value={draft.intervals}
                         baseRanges={data.event.baseRanges}
-                        disabled={dragging || draft.status !== 'maybe'}
+                        readOnly={dragging}
                         onChange={(intervals) =>
                           changeDay(day.id, { intervals, intervalsDirty: true })
                         }
                       />
                     )}
-                    {comments.has(day.id) && (draft.status !== null || dragging) && (
-                      <label className="block">
+                    {comments.has(day.id) && displayStatus !== null && (
+                      <label className="block max-w-sm">
                         <span className="sr-only">{candidateDayLabel(day.date)}のコメント</span>
                         <textarea
-                          className="textarea w-full"
-                          disabled={draft.status === null || dragging}
+                          ref={(element) => {
+                            if (element && commentFocus.current === day.id) {
+                              element.focus();
+                              commentFocus.current = null;
+                            }
+                          }}
+                          className="textarea h-11 w-full resize-none overflow-y-auto"
+                          placeholder="例：19時以降なら参加可"
+                          readOnly={dragging}
                           value={draft.comment}
                           onChange={(e) =>
                             changeDay(day.id, { comment: e.target.value, commentDirty: true })
                           }
-                          rows={2}
+                          rows={1}
                         />
                       </label>
                     )}
@@ -490,51 +675,208 @@ export default function DateFirstAnswerEditor({
         </fieldset>
       </form>
       <ConfirmationModal
+        isOpen={timeEditor !== null}
+        title="△の日の参加可能時間"
+        description="同じ時間を設定する日付を選んでください。"
+        widthClassName="max-w-3xl motion-safe:duration-150 motion-reduce:transition-none"
+        onCancel={() => setTimeEditor(null)}
+        confirmAction={
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={
+              !timeEditor || timeEditor.dayIds.length === 0 || timeEditor.intervals === null
+            }
+            onClick={applyTimeEditor}
+          >
+            選択した日へ設定
+          </button>
+        }
+      >
+        {timeEditor && (
+          <div className="space-y-4" data-testid="date-first-maybe-times">
+            <fieldset className="space-y-2">
+              <legend className="mb-2 text-sm font-medium">対象の日付</legend>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="checkbox checkbox-sm"
+                  checked={timeEditor.dayIds.length === maybeDays.length}
+                  onChange={(event) => {
+                    const dayIds = event.target.checked ? maybeDays.map((day) => day.id) : [];
+                    setTimeEditor({
+                      ...timeEditor,
+                      dayIds,
+                      intervals: timeEditor.edited ? timeEditor.intervals : commonIntervals(dayIds),
+                    });
+                  }}
+                />
+                △の全日付
+              </label>
+              <div className="max-h-40 space-y-2 overflow-y-auto">
+                {maybeDays.map((day) => (
+                  <label key={day.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-sm"
+                      checked={timeEditor.dayIds.includes(day.id)}
+                      onChange={(event) => {
+                        const dayIds = event.target.checked
+                          ? [...timeEditor.dayIds, day.id]
+                          : timeEditor.dayIds.filter((id) => id !== day.id);
+                        setTimeEditor({
+                          ...timeEditor,
+                          dayIds,
+                          intervals: timeEditor.edited
+                            ? timeEditor.intervals
+                            : commonIntervals(dayIds),
+                        });
+                      }}
+                    />
+                    <span>
+                      {candidateDayLabel(day.date)}
+                      {days[day.id].intervals.length > 0 && (
+                        <span className="text-base-content/65 ml-2">
+                          {dayIntervalText(days[day.id].intervals)}
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            {timeEditor.intervals === null && (
+              <p className="text-sm">日付ごとに時間が異なります。設定する時間を選んでください。</p>
+            )}
+            <DateFirstTimeGrid
+              key={timeEditor.dayIds.join(',')}
+              id="maybe-time-editor"
+              value={timeEditor.intervals ?? []}
+              baseRanges={data.event.baseRanges}
+              disabled={timeEditor.dayIds.length === 0}
+              onChange={(intervals) =>
+                setTimeEditor((old) => old && { ...old, intervals, edited: true })
+              }
+            />
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              disabled={timeEditor.dayIds.length === 0}
+              onClick={() => setTimeEditor({ ...timeEditor, intervals: [], edited: true })}
+            >
+              時間を指定しない
+            </button>
+          </div>
+        )}
+      </ConfirmationModal>
+      <ConfirmationModal
         isOpen={confirm}
         title="回答を保存する"
         confirmLabel="この内容で保存"
+        cancelLabel="入力に戻る"
+        widthClassName="max-w-xl"
         isConfirming={pending}
         onCancel={() => setConfirm(false)}
         onConfirm={save}
       >
-        <div className="mt-4 space-y-3">
-          <p className="break-words">{name.trim()}さん</p>
-          {kind === 'days' ? (
-            dayChanges.length === 0 ? (
-              <p>{baseline ? '日付の回答は変更しません。' : '日付はすべて未回答です。'}</p>
+        <div className="space-y-4">
+          <p className="break-words font-medium">{name.trim()}さん</p>
+          <div className="max-h-[50dvh] space-y-4 overflow-y-auto pr-1">
+            {kind === 'days' ? (
+              dayChanges.length === 0 ? (
+                <p>{baseline ? '日付の回答は変更しません。' : '日付はすべて未回答です。'}</p>
+              ) : (
+                <ul className="space-y-4">
+                  {dayChanges.map((change) => {
+                    const day = data.days.find((d) => d.id === change.id)!;
+                    const draft = days[change.id];
+                    const previous = baseline?.days.find((d) => d.id === change.id);
+                    const Icon =
+                      draft.status === 'yes' ? Circle : draft.status === 'maybe' ? Triangle : X;
+                    const removed: string[] = [];
+                    if (
+                      previous?.comment &&
+                      (draft.status === null || (draft.commentDirty && !draft.comment))
+                    )
+                      removed.push('コメント');
+                    if (
+                      previous?.intervals.length &&
+                      (draft.status !== 'maybe' ||
+                        (draft.intervalsDirty && draft.intervals.length === 0))
+                    )
+                      removed.push('時間指定');
+                    return (
+                      <li key={change.id} className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <p className="font-medium">{candidateDayLabel(day.date)}</p>
+                          <span
+                            className="inline-flex min-h-6 items-center text-sm"
+                            role="img"
+                            aria-label={symbol(draft.status)}
+                          >
+                            {draft.status === null ? (
+                              '未回答'
+                            ) : (
+                              <Icon size={18} aria-hidden="true" />
+                            )}
+                          </span>
+                        </div>
+                        {draft.status === 'maybe' && draft.intervals.length > 0 && (
+                          <p className="text-sm tabular-nums">{dayIntervalText(draft.intervals)}</p>
+                        )}
+                        {draft.status !== null && draft.comment && (
+                          <p className="text-base-content/75 whitespace-pre-wrap break-words text-sm">
+                            {draft.comment}
+                          </p>
+                        )}
+                        {removed.length > 0 && (
+                          <p className="text-base-content/65 text-sm">{removed.join('・')}を削除</p>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )
+            ) : timeChanges.length === 0 ? (
+              <p>時間の回答は変更しません。</p>
             ) : (
-              dayChanges.map((change) => {
-                const day = data.days.find((d) => d.id === change.id)!;
-                const draft = days[change.id];
+              data.days.map((day) => {
+                const slots = data.slots.filter(
+                  (slot) => slot.dayId === day.id && Object.hasOwn(times, slot.id),
+                );
+                if (slots.length === 0) return null;
                 return (
-                  <div key={change.id}>
-                    <p>
-                      {candidateDayLabel(day.date)}：{symbol(draft.status)}
-                    </p>
-                    {draft.status === 'maybe' && (
-                      <p className="text-sm">{dayIntervalText(draft.intervals)}</p>
-                    )}
-                    {draft.status !== null && draft.comment && (
-                      <p className="whitespace-pre-wrap break-words text-sm">{draft.comment}</p>
-                    )}
-                  </div>
+                  <section key={day.id} className="space-y-2">
+                    <h4 className="font-medium">{candidateDayLabel(day.date)}</h4>
+                    <ul className="space-y-1">
+                      {slots.map((slot) => (
+                        <li key={slot.id} className="flex items-center gap-3 text-sm">
+                          <span className="min-w-36 tabular-nums">
+                            {formatDayMinute(slot.start)}〜{formatDayMinute(slot.end)}
+                          </span>
+                          <span
+                            className="inline-flex min-h-6 items-center"
+                            role="img"
+                            aria-label={
+                              times[slot.id] === null ? '未回答' : times[slot.id] ? '○' : '×'
+                            }
+                          >
+                            {times[slot.id] === null ? (
+                              '未回答'
+                            ) : times[slot.id] ? (
+                              <Circle size={18} aria-hidden="true" />
+                            ) : (
+                              <X size={18} aria-hidden="true" />
+                            )}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
                 );
               })
-            )
-          ) : timeChanges.length === 0 ? (
-            <p>時間の回答は変更しません。</p>
-          ) : (
-            timeChanges.map((change) => {
-              const slot = data.slots.find((s) => s.id === change.id)!;
-              return (
-                <p key={change.id}>
-                  {candidateDayLabel(data.days.find((d) => d.id === slot.dayId)!.date)}{' '}
-                  {formatDayMinute(slot.start)}〜{formatDayMinute(slot.end)}：
-                  {change.availability === null ? '未回答' : change.availability ? '○' : '×'}
-                </p>
-              );
-            })
-          )}
+            )}
+          </div>
         </div>
       </ConfirmationModal>
       <ConfirmationModal
@@ -607,8 +949,8 @@ export default function DateFirstAnswerEditor({
       </ConfirmationModal>
       <ConfirmationModal
         isOpen={showProposals}
-        title="△時間からの提案"
-        description="枠全体を参加可能時間が覆う候補だけを○にします。保存済み回答は変更しません。"
+        title="△の時間からの提案"
+        description="参加可能な時間内に全体が収まる候補だけを○にします。保存済み回答は変更しません。"
         confirmLabel="提案を入力に採用"
         onCancel={() => setShowProposals(false)}
         onConfirm={() => {

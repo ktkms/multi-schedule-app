@@ -17,6 +17,7 @@ import { recordEventHistory } from '@/lib/event-history-actions';
 import WizardProgress from '@/components/common/wizard-progress';
 import TermsCheckbox from '@/components/terms/terms-checkbox';
 import DateFirstDatePicker from './date-picker';
+import DateFirstTimeInput from './time-input';
 
 const steps = [{ label: 'イベント情報' }, { label: '候補日を選ぶ' }, { label: '内容を確認' }];
 const presets: { label: string; range: DayInterval }[] = [
@@ -139,7 +140,12 @@ export default function DateFirstCreate() {
           <>
             <DateFirstDatePicker value={days} onChange={setDays} />
             <details>
-              <summary className="cursor-pointer py-2">△回答の基本表示時間（任意）</summary>
+              <summary className="cursor-pointer py-2 font-medium">
+                回答者に表示する時間帯（任意）
+              </summary>
+              <p className="text-base-content/65 mt-3 text-sm">
+                △で回答する人が、参加可能な時間を選ぶときの初期表示です。回答時に前後へ広げられます。
+              </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {presets.map((p) => {
                   const selected = selectedPresets.includes(p.label);
@@ -147,7 +153,7 @@ export default function DateFirstCreate() {
                     <button
                       key={p.label}
                       type="button"
-                      className={`btn btn-sm ${selected ? 'btn-primary' : 'btn-ghost'}`}
+                      className={`btn btn-sm ${selected ? 'btn-primary' : 'btn-outline'}`}
                       aria-pressed={selected}
                       onClick={() => {
                         const next = selected
@@ -168,41 +174,28 @@ export default function DateFirstCreate() {
                         setRanges(nextRanges);
                       }}
                     >
-                      {p.label}
+                      {p.label === '全日' ? '終日' : p.label}（{p.range[0] / 60}〜{p.range[1] / 60}
+                      時）
                     </button>
                   );
                 })}
               </div>
               <p className="mt-3 text-sm">
-                {dayIntervalText(ranges) || '標準の10:00〜22:00を表示'}
+                表示する時間帯：{dayIntervalText(ranges) || '10:00〜22:00（標準）'}
               </p>
-              <div className="mt-3 flex flex-wrap items-end gap-2">
-                <label>
-                  開始
-                  <input
-                    aria-label="基本表示の開始"
-                    className="input block w-28"
-                    value={start}
-                    onChange={(e) => setStart(e.target.value)}
-                  />
-                </label>
-                <label>
-                  終了
-                  <input
-                    aria-label="基本表示の終了"
-                    className="input block w-28"
-                    value={end}
-                    onChange={(e) => setEnd(e.target.value)}
-                  />
-                </label>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <DateFirstTimeInput label="表示開始" value={start} onChange={setStart} />
+                <DateFirstTimeInput label="表示終了" value={end} onChange={setEnd} />
                 <button
                   type="button"
-                  className="btn btn-ghost"
+                  className="btn btn-outline justify-self-start sm:col-span-2"
                   onClick={() => {
                     const lo = parseDayMinute(start),
                       hi = parseDayMinute(end);
                     if (lo === null || hi === null || lo >= hi)
-                      setError('例：18:00〜翌2:00。翌6:00まで指定できます。');
+                      setError(
+                        '開始時刻より後の終了時刻を選んでください。翌日は6:00まで指定できます。',
+                      );
                     else {
                       setRanges([[lo, hi]]);
                       setSelectedPresets(
@@ -214,9 +207,10 @@ export default function DateFirstCreate() {
                     }
                   }}
                 >
-                  範囲を置き換える
+                  この時間帯を使う
                 </button>
               </div>
+              <p className="text-base-content/65 mt-2 text-sm">翌日は6:00まで指定できます。</p>
             </details>
           </>
         )}
@@ -234,20 +228,22 @@ export default function DateFirstCreate() {
                 </div>
               )}
               <div>
-                <dt className="text-base-content/65 text-sm">候補日</dt>
-                <dd className="mt-1 flex flex-wrap gap-3">
-                  {days.map((day) => (
-                    <span key={day}>
-                      {day}（{candidateDayLabel(day)}）
-                    </span>
-                  ))}
+                <dt className="text-base-content/65 text-sm">候補日（{days.length}日）</dt>
+                <dd className="mt-2" data-testid="date-first-create-days">
+                  <ul className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
+                    {days.map((day) => (
+                      <li key={day} className="whitespace-nowrap">
+                        {candidateDayLabel(day)}
+                      </li>
+                    ))}
+                  </ul>
                 </dd>
               </div>
             </dl>
             <TermsCheckbox isChecked={accepted} onChange={setAccepted} />
           </>
         )}
-        <div className="flex gap-3">
+        <div className="flex items-center gap-3">
           {step > 1 && (
             <button type="button" className="btn btn-ghost" onClick={() => setStep(step - 1)}>
               戻る
@@ -256,7 +252,7 @@ export default function DateFirstCreate() {
           <button
             data-testid="date-first-create-next"
             type="submit"
-            className="btn btn-primary"
+            className="btn btn-primary ml-auto"
             disabled={step === 3 && !accepted}
           >
             {pending ? '作成中…' : step === 3 ? 'イベントを作成' : '次へ'}

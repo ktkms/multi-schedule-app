@@ -1,5 +1,10 @@
 // src/app/event/[public_id]/page.tsx
-import { getEvent, getEventDates, getParticipantById } from '@/lib/actions';
+import {
+  getEvent,
+  getEventDates,
+  getParticipantById,
+  getMyLinkedParticipantIdForEvent,
+} from '@/lib/actions';
 import { notFound } from 'next/navigation';
 import AvailabilityForm from '@/components/availability-form';
 import siteConfig from '@/lib/site-config';
@@ -70,17 +75,21 @@ export default async function EventPage({ params, searchParams }: EventPageProps
   }
 
   if (event.scheduling_mode === 'date_first') {
-    const [data, answer] = await Promise.all([
+    const [data, answer, session] = await Promise.all([
       readDateFirstEvent(public_id),
       participantId ? readDateFirstAnswer(public_id, participantId) : Promise.resolve(null),
+      getAuthSession(),
     ]);
     if (!data || (participantId && !answer)) notFound();
+    const linkedId = session?.user?.id ? await getMyLinkedParticipantIdForEvent(event.id) : null;
     return (
       <div className="app-page-narrow">
         <DateFirstAnswerEditor
           data={data}
           initialAnswer={answer}
           kind={kind === 'times' ? 'times' : 'days'}
+          signedIn={Boolean(session?.user?.id)}
+          canUseSchedule={participantId ? linkedId === participantId : !linkedId}
         />
       </div>
     );

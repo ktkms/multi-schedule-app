@@ -186,6 +186,7 @@ export const dateFirstEventSchema = z.object({
       maybe: count,
       no: count,
       unanswered: count,
+      hasComment: z.boolean().optional(),
     }),
   ),
   slots: z.array(

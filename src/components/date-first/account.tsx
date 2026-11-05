@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { linkMyParticipantAnswerById } from '@/lib/actions';
 import { getDateFirstAnswer, saveDateFirst } from '@/lib/date-first-actions';
 import {
   dateFirstSyncPreviewSchema,
@@ -13,7 +12,6 @@ import {
 import { candidateDayLabel, dayIntervalText } from '@/lib/date-first-ui';
 import { getDateFirstSyncChanges } from '@/lib/date-first-sync-diff';
 import ConfirmationModal from '@/components/common/confirmation-modal';
-import DateFirstAnswerSchedule from './answer-schedule';
 
 const mark = (status: string | boolean | null | undefined) =>
   status === 'yes' || status === true
@@ -28,74 +26,31 @@ const mark = (status: string | boolean | null | undefined) =>
 export default function DateFirstAccount({
   data,
   myParticipantId,
-  signedIn,
-  initialParticipantId,
 }: {
   data: DateFirstEvent;
   myParticipantId: string | null;
-  signedIn: boolean;
-  initialParticipantId?: string;
 }) {
-  const [participant, setParticipant] = useState(myParticipantId ?? initialParticipantId ?? ''),
-    [linkConfirm, setLinkConfirm] = useState(false);
   const [preview, setPreview] = useState<DateFirstSyncPreview | null>(null),
     [answer, setAnswer] = useState<DateFirstAnswer | null>(null),
     [error, setError] = useState('');
   const [pending, startTransition] = useTransition();
   const { days: dayChanges, times: timeChanges } = getDateFirstSyncChanges(answer, preview);
-  if (!signedIn)
-    return (
-      <p className="text-sm">
-        <a
-          className="link"
-          href={`/auth/signin?callbackUrl=${encodeURIComponent(`/event/${data.event.token}`)}`}
-        >
-          ログイン
-        </a>
-        すると、アカウント予定から自分の回答へ反映できます。
-      </p>
-    );
   return (
-    <section
-      id="account-answers"
-      className="scroll-mt-24 space-y-4"
-      aria-label="アカウント予定の反映"
-    >
-      <h2 className="text-lg font-semibold">自分の予定を使う</h2>
+    <section className="space-y-4" aria-label="アカウント予定の反映">
       {error && (
         <p className="text-error" role="alert">
           {error}
         </p>
       )}
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="min-w-0 flex-1 space-y-2">
-          <span className="block">アカウントに紐付ける回答</span>
-          <select
-            className="select w-full"
-            value={participant}
-            onChange={(e) => setParticipant(e.target.value)}
-          >
-            <option value="">選択してください</option>
-            {data.participants.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          type="button"
-          className="btn btn-ghost"
-          disabled={pending || !participant || participant === myParticipantId}
-          onClick={() => setLinkConfirm(true)}
-        >
-          紐付けを確認
-        </button>
-      </div>
+      {myParticipantId && (
+        <p className="break-words text-sm">
+          自分の回答：{data.participants.find((p) => p.id === myParticipantId)?.name}
+        </p>
+      )}
       {myParticipantId && (
         <button
           type="button"
-          className="btn btn-outline"
+          className="btn btn-primary"
           disabled={pending}
           onClick={() =>
             startTransition(async () => {
@@ -117,39 +72,9 @@ export default function DateFirstAccount({
             })
           }
         >
-          予定を反映する差分を確認
+          変更内容を確認して反映
         </button>
       )}
-      {myParticipantId && data.slots.length > 0 && (
-        <DateFirstAnswerSchedule data={data} participantId={myParticipantId} />
-      )}
-      <ConfirmationModal
-        isOpen={linkConfirm}
-        title="この回答を自分に紐付けますか？"
-        description={`「${data.participants.find((p) => p.id === participant)?.name ?? ''}」さんの回答を、自分のアカウント予定やAI連携（MCP）で使います。共有リンクでの共同編集は引き続き可能です。`}
-        confirmLabel="自分の回答として紐付ける"
-        isConfirming={pending}
-        onCancel={() => setLinkConfirm(false)}
-        onConfirm={() =>
-          startTransition(async () => {
-            try {
-              const result = await linkMyParticipantAnswerById({
-                eventId: data.event.id,
-                participantId: participant,
-              });
-              if (!result.success) {
-                setError(result.message);
-                setLinkConfirm(false);
-                return;
-              }
-              window.location.reload();
-            } catch {
-              setError('紐付け結果を確認できませんでした。再読み込みして確認してください。');
-              setLinkConfirm(false);
-            }
-          })
-        }
-      />
       <ConfirmationModal
         isOpen={preview !== null}
         title="予定から回答へ反映"
@@ -184,7 +109,9 @@ export default function DateFirstAccount({
         }}
       >
         <div className="mt-4 space-y-3">
-          <p className="text-sm">手動で変更した記号・時間・未回答は保持します。</p>
+          <p className="text-sm">
+            手動で変更した回答・時間や、手動で未回答に戻した状態は保持します。
+          </p>
           {data.days.some((day) => day.confirmed) && (
             <p className="text-sm">
               確定済みの日付があります。確定内容を維持して回答だけを更新します。
@@ -216,7 +143,7 @@ export default function DateFirstAccount({
             <div key={id} className="text-warning">
               <p>
                 {candidateDayLabel(data.days.find((d) => d.id === id)!.date)}
-                は未回答になり、次のコメントを削除します。
+                は未回答になり、以下のコメントが削除されます。
               </p>
               <p className="whitespace-pre-wrap break-words">
                 {answer?.days.find((d) => d.id === id)?.comment}

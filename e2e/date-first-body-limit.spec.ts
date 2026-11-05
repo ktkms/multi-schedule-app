@@ -34,7 +34,7 @@ test('Server ActionのJSON・multipart本文で767/768/769KiBを検証する', a
       page.waitForRequest((r) => r.method() === 'POST' && Boolean(r.headers()['next-action'])),
       page.getByRole('dialog').getByRole('button', { name: 'この内容で保存', exact: true }).click(),
     ]);
-    await expect(page.getByTestId('date-first-event')).toBeVisible();
+    await expect(page.getByTestId('answer-complete-page')).toBeVisible();
     const participant = (
       await db.query('SELECT id FROM participants WHERE event_id=$1', [event.id])
     ).rows[0].id;

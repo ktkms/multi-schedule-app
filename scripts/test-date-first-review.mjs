@@ -419,6 +419,22 @@ test('日付先行型マイグレーションの隔離DB検証', async (t) => {
       );
     });
 
+    await t.test('日付集計にコメント有無を含め、空白だけや削除後には印を出さない', async () => {
+      const e = await fixture(db);
+      await save(db, e, 'days', '0', [
+        { id: e.days[0].id, status: 'maybe', comment: '途中から参加' },
+      ]);
+      let result = await call(db, 'read_event', [e.token]);
+      assert.equal(result.days.find((day) => day.id === e.days[0].id).hasComment, true);
+      assert.equal(result.days.find((day) => day.id === e.days[1].id).hasComment, false);
+      await save(db, e, 'days', '1', [{ id: e.days[0].id, comment: ' \n　 ' }]);
+      result = await call(db, 'read_event', [e.token]);
+      assert.equal(result.days.find((day) => day.id === e.days[0].id).hasComment, false);
+      await save(db, e, 'days', '2', [{ id: e.days[0].id, comment: '' }]);
+      result = await call(db, 'read_event', [e.token]);
+      assert.equal(result.days.find((day) => day.id === e.days[0].id).hasComment, false);
+    });
+
     await t.test('V06 89日からの同時追加で90日上限を守る', async () => {
       const days = Array.from({ length: 89 }, (_, i) =>
         new Date(Date.UTC(2026, 0, i + 1)).toISOString().slice(0, 10),

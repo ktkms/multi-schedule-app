@@ -2,8 +2,29 @@
 
 import { revalidatePath } from 'next/cache';
 import { getAuthSession } from '@/lib/auth';
-import { executeDateFirst, readDateFirstAnswer, readDateFirstDay } from './date-first-service';
+import {
+  executeDateFirst,
+  readDateFirstAnswer,
+  readDateFirstDay,
+  readDateFirstScheduleDraft,
+} from './date-first-service';
 import { dateFirstCommandSchema } from './date-first-schema';
+
+/** セッション本人の予定だけを取得し、他人の回答には取り込ませない。 */
+export async function getDateFirstScheduleDraft(token: string, participantId?: string) {
+  const userId = (await getAuthSession())?.user?.id;
+  if (!userId) return { success: false as const, message: 'ログインしてからご利用ください。' };
+  try {
+    const draft = await readDateFirstScheduleDraft(token, userId, participantId);
+    return { success: true as const, draft };
+  } catch {
+    return {
+      success: false as const,
+      message:
+        '予定を取得できませんでした。既に回答済みの場合は、自分の回答を選んで編集してください。',
+    };
+  }
+}
 
 /** 公開リンクの共同編集を維持し、個人の予定反映だけセッション本人へ限定する。 */
 export async function saveDateFirst(input: unknown) {

@@ -1046,7 +1046,7 @@ export default function AccountScheduleSettings({
                   <li key={event.eventId} className="space-y-1">
                     <Link
                       className="link break-words text-sm"
-                      href={`/event/${event.publicToken}#account-answers`}
+                      href={`/event/${event.publicToken}/input/schedule-review`}
                     >
                       {event.title}
                     </Link>

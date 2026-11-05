@@ -125,6 +125,7 @@ export default async function EventPage({ params, searchParams }: EventPageProps
         myParticipantId={myParticipantId}
         signedIn={Boolean(session?.user?.id)}
         initialParticipantId={data.participants.some((p) => p.id === saved) ? saved : undefined}
+        openDateAddition={action === 'add-dates'}
       />
     );
   }
