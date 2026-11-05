@@ -48,7 +48,7 @@ export default function DateFirstDayHeatmap({
           disabled={index === 0}
           onClick={() => setSelectedMonth(months[index - 1])}
         >
-          <ChevronLeft size={18} aria-hidden="true" />
+          <ChevronLeft size={20} aria-hidden="true" />
         </button>
         <select
           className="select w-auto"
@@ -69,7 +69,7 @@ export default function DateFirstDayHeatmap({
           disabled={index === months.length - 1}
           onClick={() => setSelectedMonth(months[index + 1])}
         >
-          <ChevronRight size={18} aria-hidden="true" />
+          <ChevronRight size={20} aria-hidden="true" />
         </button>
       </div>
       <p className="text-base-content/65 text-xs">色の濃さ：○の人数</p>
@@ -112,12 +112,14 @@ export default function DateFirstDayHeatmap({
             >
               <span className="flex items-center gap-0.5 text-xs">
                 {i + 1}
-                {day.confirmed && <Check size={12} aria-hidden="true" />}
+                {day.confirmed && <Check size={14} className="shrink-0" aria-hidden="true" />}
               </span>
               <span className="text-sm font-semibold tabular-nums">○{day.yes}</span>
-              <span className="flex min-h-4 items-center justify-center gap-0.5 text-[11px] tabular-nums">
+              <span className="flex min-h-4 flex-wrap items-center justify-center gap-x-0.5 text-[11px] tabular-nums">
                 {day.maybe > 0 && <span>△{day.maybe}</span>}
-                {day.hasComment && <MessageSquare size={12} aria-hidden="true" />}
+                {day.hasComment && (
+                  <MessageSquare size={14} className="shrink-0" aria-hidden="true" />
+                )}
               </span>
             </button>
           );

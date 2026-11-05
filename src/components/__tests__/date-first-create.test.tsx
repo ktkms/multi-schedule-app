@@ -80,9 +80,11 @@ it('時刻ピッカーで翌朝の表示時間を設定し、重複しない候�
   fireEvent.click(screen.getByTestId('date-first-create-next'));
   fireEvent.change(screen.getByLabelText('表示月'), { target: { value: '2099-11' } });
   drag('2099-11-07', '2099-11-08');
-  fireEvent.click(screen.getByText('回答者に表示する時間帯（任意）'));
   fireEvent.click(screen.getByRole('button', { name: '夜（18〜24時）' }));
   expect(screen.getByText('表示する時間帯：18:00〜24:00')).toBeInTheDocument();
+  fireEvent.click(screen.getByText('時刻を指定', { exact: true }));
+  expect(screen.getByLabelText('表示開始時刻')).toHaveValue('18:00');
+  expect(screen.getByLabelText('表示終了の日付')).toHaveValue('next');
   fireEvent.change(screen.getByLabelText('表示開始時刻'), { target: { value: '22:00' } });
   fireEvent.change(screen.getByLabelText('表示終了の日付'), { target: { value: 'next' } });
   fireEvent.change(screen.getByLabelText('表示終了時刻'), { target: { value: '02:00' } });

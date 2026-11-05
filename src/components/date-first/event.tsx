@@ -98,7 +98,7 @@ function DayResults({
               {row.comment && (
                 <button
                   type="button"
-                  className="btn btn-ghost btn-square relative"
+                  className="btn btn-ghost btn-square shrink-0"
                   aria-label={`${row.name}さんのコメント`}
                   aria-expanded={comments.has(row.id)}
                   onClick={() =>
@@ -110,8 +110,10 @@ function DayResults({
                     })
                   }
                 >
-                  <MessageSquare size={18} aria-hidden="true" />
-                  <span className="bg-primary absolute right-2 top-2 h-1.5 w-1.5 rounded-full" />
+                  <span className="relative inline-flex" aria-hidden="true">
+                    <MessageSquare size={20} />
+                    <span className="bg-primary absolute -right-0.5 -top-0.5 size-1.5 rounded-full" />
+                  </span>
                 </button>
               )}
             </div>
@@ -445,7 +447,7 @@ export default function DateFirstEventView({
                   aria-label="回答詳細を閉じる"
                   onClick={closeDetails}
                 >
-                  <X size={18} aria-hidden="true" />
+                  <X size={20} aria-hidden="true" />
                 </button>
               </div>
               <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm tabular-nums">

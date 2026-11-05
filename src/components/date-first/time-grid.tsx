@@ -95,7 +95,7 @@ export default function DateFirstTimeGrid({
             if (!readOnly) setStart(Math.max(0, start - 60));
           }}
         >
-          <Plus size={18} className="mx-auto" aria-hidden="true" />
+          <Plus size={16} className="mx-auto" aria-hidden="true" />
         </button>
         {Array.from({ length: (end - start) / 60 }, (_, index) => start + index * 60).map((lo) => {
           const full = coversDayInterval(value, lo, lo + 60);
@@ -132,7 +132,7 @@ export default function DateFirstTimeGrid({
                   if (!readOnly) setEnd(Math.min(1800, end + 60));
                 }}
               >
-                <Plus size={18} className="mx-auto" aria-hidden="true" />
+                <Plus size={16} className="mx-auto" aria-hidden="true" />
               </button>
             </div>
           ) : (

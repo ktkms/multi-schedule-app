@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { z } from 'zod';
 import { saveDateFirst } from '@/lib/date-first-actions';
-import { dateFirstCommandSchema } from '@/lib/date-first-schema';
+import { dateFirstCommandSchema, formatDayMinute } from '@/lib/date-first-schema';
 import {
   candidateDayLabel,
   dayIntervalText,
@@ -139,12 +139,12 @@ export default function DateFirstCreate() {
         {step === 2 && (
           <>
             <DateFirstDatePicker value={days} onChange={setDays} />
-            <details>
-              <summary className="cursor-pointer py-2 font-medium">
-                回答者に表示する時間帯（任意）
-              </summary>
-              <p className="text-base-content/65 mt-3 text-sm">
-                △で回答する人が、参加可能な時間を選ぶときの初期表示です。回答時に前後へ広げられます。
+            <section aria-labelledby="date-first-base-time-heading">
+              <h3 id="date-first-base-time-heading" className="font-medium">
+                △回答の時間帯（任意）
+              </h3>
+              <p className="text-base-content/65 mt-1 text-sm">
+                回答者が△を選んだとき、最初に表示する時間帯です。
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {presets.map((p) => {
@@ -172,6 +172,12 @@ export default function DateFirstCreate() {
                           nextRanges[0][1] === 1440;
                         setSelectedPresets(full ? ['全日'] : next);
                         setRanges(nextRanges);
+                        if (nextRanges.length <= 1) {
+                          const [lo, hi] = nextRanges[0] ?? [600, 1320];
+                          setStart(formatDayMinute(lo).padStart(5, '0'));
+                          setEnd(formatDayMinute(hi).padStart(5, '0'));
+                        }
+                        setError('');
                       }}
                     >
                       {p.label === '全日' ? '終日' : p.label}（{p.range[0] / 60}〜{p.range[1] / 60}
@@ -183,35 +189,40 @@ export default function DateFirstCreate() {
               <p className="mt-3 text-sm">
                 表示する時間帯：{dayIntervalText(ranges) || '10:00〜22:00（標準）'}
               </p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <DateFirstTimeInput label="表示開始" value={start} onChange={setStart} />
-                <DateFirstTimeInput label="表示終了" value={end} onChange={setEnd} />
-                <button
-                  type="button"
-                  className="btn btn-outline justify-self-start sm:col-span-2"
-                  onClick={() => {
-                    const lo = parseDayMinute(start),
-                      hi = parseDayMinute(end);
-                    if (lo === null || hi === null || lo >= hi)
-                      setError(
-                        '開始時刻より後の終了時刻を選んでください。翌日は6:00まで指定できます。',
-                      );
-                    else {
-                      setRanges([[lo, hi]]);
-                      setSelectedPresets(
-                        presets
-                          .filter((preset) => preset.range[0] === lo && preset.range[1] === hi)
-                          .map((preset) => preset.label),
-                      );
-                      setError('');
-                    }
-                  }}
-                >
-                  この時間帯を使う
-                </button>
-              </div>
-              <p className="text-base-content/65 mt-2 text-sm">翌日は6:00まで指定できます。</p>
-            </details>
+              <details className="mt-2">
+                <summary className="min-h-11 cursor-pointer content-center text-sm font-medium">
+                  時刻を指定
+                </summary>
+                <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                  <DateFirstTimeInput label="表示開始" value={start} onChange={setStart} />
+                  <DateFirstTimeInput label="表示終了" value={end} onChange={setEnd} />
+                  <button
+                    type="button"
+                    className="btn btn-outline justify-self-start sm:col-span-2"
+                    onClick={() => {
+                      const lo = parseDayMinute(start),
+                        hi = parseDayMinute(end);
+                      if (lo === null || hi === null || lo >= hi)
+                        setError(
+                          '開始時刻より後の終了時刻を選んでください。翌日は6:00まで指定できます。',
+                        );
+                      else {
+                        setRanges([[lo, hi]]);
+                        setSelectedPresets(
+                          presets
+                            .filter((preset) => preset.range[0] === lo && preset.range[1] === hi)
+                            .map((preset) => preset.label),
+                        );
+                        setError('');
+                      }
+                    }}
+                  >
+                    この時間帯を使う
+                  </button>
+                </div>
+                <p className="text-base-content/65 mt-2 text-sm">翌日は6:00まで指定できます。</p>
+              </details>
+            </section>
           </>
         )}
         {step === 3 && (

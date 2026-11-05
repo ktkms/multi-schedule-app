@@ -74,6 +74,14 @@ test('本人リンク・予定反映の削除確認・正式時間回答の予�
       "INSERT INTO user_schedule_blocks(user_id,start_time,end_time,availability,source,event_id) VALUES($1,'2098-12-08 10:00Z','2098-12-08 11:00Z',true,'manual',$2) ON CONFLICT(user_id,start_time,end_time) DO UPDATE SET availability=true,source='manual',event_id=excluded.event_id",
       [user, event.id],
     );
+    await page.goto(`/event/${event.token}/input`);
+    const prompt = page.getByRole('dialog', { name: '予定を取り込みますか？' });
+    const candidate = page.locator(`[data-testid="day-${days[1].id}-maybe"]:visible`);
+    await expect(prompt).toBeVisible();
+    await expect(candidate).toHaveAttribute('aria-pressed', 'false');
+    await prompt.getByRole('button', { name: '取り込まずに続ける' }).click();
+    await expect(prompt).toHaveCount(0);
+    await expect(candidate).toHaveAttribute('aria-pressed', 'false');
     await page.goto(`/event/${event.token}`);
     await page.getByTestId('event-answer-link-open').click();
     await page.getByTestId('event-answer-link-select').selectOption(participant);
@@ -96,10 +104,7 @@ test('本人リンク・予定反映の削除確認・正式時間回答の予�
       ).rows;
     expect(await readDay()).toMatchObject([{ status: 'maybe', source: 'account' }]);
     await page.goto(`/event/${event.token}/input?participant_id=${participant}&kind=days`);
-    await page.getByRole('button', { name: '自分の予定を使う', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText(
-      '入力に反映する変更はありません。入力済みの回答は保持しました。',
-    );
+    await expect(page.getByRole('dialog', { name: '予定を取り込みますか？' })).toHaveCount(0);
     const day = page.getByTestId(`day-answer-${days[1].id}`);
     await expect(day.getByTestId(`day-${days[1].id}-maybe`)).toHaveAttribute(
       'aria-pressed',

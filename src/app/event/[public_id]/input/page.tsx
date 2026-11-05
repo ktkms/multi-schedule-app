@@ -1,10 +1,5 @@
 // src/app/event/[public_id]/page.tsx
-import {
-  getEvent,
-  getEventDates,
-  getParticipantById,
-  getMyLinkedParticipantIdForEvent,
-} from '@/lib/actions';
+import { getEvent, getEventDates, getParticipantById } from '@/lib/actions';
 import { notFound } from 'next/navigation';
 import AvailabilityForm from '@/components/availability-form';
 import siteConfig from '@/lib/site-config';
@@ -15,6 +10,7 @@ import { EventNotFoundError } from '@/lib/errors';
 import { getUserScheduleContext } from '@/lib/schedule-actions';
 import { getAuthSession } from '@/lib/auth';
 import { readDateFirstEvent, readDateFirstAnswer } from '@/lib/date-first-service';
+import { getDateFirstScheduleDraft } from '@/lib/date-first-actions';
 import DateFirstAnswerEditor from '@/components/date-first/answer';
 
 export async function generateMetadata({
@@ -75,21 +71,20 @@ export default async function EventPage({ params, searchParams }: EventPageProps
   }
 
   if (event.scheduling_mode === 'date_first') {
-    const [data, answer, session] = await Promise.all([
+    const [data, answer, schedule] = await Promise.all([
       readDateFirstEvent(public_id),
       participantId ? readDateFirstAnswer(public_id, participantId) : Promise.resolve(null),
-      getAuthSession(),
+      getDateFirstScheduleDraft(public_id, participantId),
     ]);
     if (!data || (participantId && !answer)) notFound();
-    const linkedId = session?.user?.id ? await getMyLinkedParticipantIdForEvent(event.id) : null;
     return (
       <div className="app-page-narrow">
         <DateFirstAnswerEditor
+          key={JSON.stringify([public_id, participantId, kind])}
           data={data}
           initialAnswer={answer}
           kind={kind === 'times' ? 'times' : 'days'}
-          signedIn={Boolean(session?.user?.id)}
-          canUseSchedule={participantId ? linkedId === participantId : !linkedId}
+          scheduleDraft={schedule.success ? schedule.draft : undefined}
         />
       </div>
     );

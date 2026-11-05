@@ -11,14 +11,11 @@ import {
 import { Circle, MessageSquare, Triangle, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { z } from 'zod';
-import {
-  getDateFirstAnswer,
-  getDateFirstScheduleDraft,
-  saveDateFirst,
-} from '@/lib/date-first-actions';
+import { getDateFirstAnswer, saveDateFirst } from '@/lib/date-first-actions';
 import {
   type DateFirstAnswer,
   type DateFirstEvent,
+  type DateFirstSyncPreview,
   formatDayMinute,
 } from '@/lib/date-first-schema';
 import {
@@ -70,18 +67,16 @@ export default function DateFirstAnswerEditor({
   data,
   initialAnswer,
   kind,
-  signedIn = false,
-  canUseSchedule = false,
+  scheduleDraft,
 }: {
   data: DateFirstEvent;
   initialAnswer: DateFirstAnswer | null;
   kind: 'days' | 'times';
-  signedIn?: boolean;
-  canUseSchedule?: boolean;
+  scheduleDraft?: Pick<DateFirstSyncPreview, 'days' | 'times'>;
 }) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
-  const [scheduleMessage, setScheduleMessage] = useState('');
+  const [scheduleDismissed, setScheduleDismissed] = useState(false);
   useEffect(() => setReady(true), []);
   const [baseline, setBaseline] = useState(initialAnswer),
     [name, setName] = useState(initialAnswer?.name ?? '');
@@ -320,16 +315,9 @@ export default function DateFirstAnswerEditor({
       days[slot.dayId]?.status === 'maybe' &&
       coversDayInterval(days[slot.dayId].intervals, slot.start, slot.end),
   );
-  const useSchedule = () =>
-    startTransition(async () => {
-      setScheduleMessage('');
-      try {
-        const result = await getDateFirstScheduleDraft(data.event.token, baseline?.id);
-        if (!result.success) {
-          setScheduleMessage(result.message);
-          return;
-        }
-        const dayCandidates = result.draft.days.filter((row) => {
+  const dayCandidates =
+    !scheduleDismissed && kind === 'days'
+      ? (scheduleDraft?.days ?? []).filter((row) => {
           const current = days[row.id];
           return (
             current &&
@@ -339,42 +327,41 @@ export default function DateFirstAnswerEditor({
             row.status !== null &&
             (current.status !== row.status || !sameIntervals(current.intervals, row.intervals))
           );
-        });
-        const timeCandidates = result.draft.times.filter(
+        })
+      : [];
+  const timeCandidates =
+    !scheduleDismissed && kind === 'times'
+      ? (scheduleDraft?.times ?? []).filter(
           (row) =>
             row.availability !== null &&
             !Object.hasOwn(times, row.id) &&
             timeValue(row.id) !== row.availability,
-        );
-        if (kind === 'days')
-          setDays((old) => {
-            const next = { ...old };
-            for (const row of dayCandidates)
-              next[row.id] = {
-                ...old[row.id],
-                status: row.status,
-                intervals: row.intervals,
-                statusDirty: true,
-                intervalsDirty: true,
-              };
-            return next;
-          });
-        else
-          setTimes((old) => ({
-            ...Object.fromEntries(timeCandidates.map((row) => [row.id, row.availability])),
-            ...old,
-          }));
-        setScheduleMessage(
-          (kind === 'days' ? dayCandidates.length : timeCandidates.length) > 0
-            ? '予定を取り込みました。内容を確認・修正してから回答を保存してください。'
-            : '入力に反映する変更はありません。入力済みの回答は保持しました。',
-        );
-      } catch {
-        setScheduleMessage(
-          '予定を取得できませんでした。入力を保持しています。もう一度お試しください。',
-        );
-      }
-    });
+        )
+      : [];
+  const applySchedule = () => {
+    setScheduleDismissed(true);
+    if (dayCandidates.length) {
+      setDays((old) => {
+        const next = { ...old };
+        for (const row of dayCandidates) {
+          next[row.id] = {
+            ...old[row.id],
+            status: row.status,
+            intervals: row.intervals,
+            statusDirty: true,
+            intervalsDirty: true,
+          };
+        }
+        return next;
+      });
+    }
+    if (timeCandidates.length) {
+      setTimes((old) => ({
+        ...Object.fromEntries(timeCandidates.map((row) => [row.id, row.availability])),
+        ...old,
+      }));
+    }
+  };
   const save = () =>
     startTransition(async () => {
       setError('');
@@ -418,36 +405,6 @@ export default function DateFirstAnswerEditor({
         <h2 className="page-title">{kind === 'days' ? '日付を回答' : '時間を回答'}</h2>
         {baseline && <p className="break-words">「{baseline.name}」さんの回答を編集</p>}
       </header>
-      <div className="space-y-2">
-        {signedIn ? (
-          canUseSchedule ? (
-            <button
-              type="button"
-              className="btn btn-outline"
-              disabled={pending || !ready}
-              onClick={useSchedule}
-            >
-              自分の予定を使う
-            </button>
-          ) : (
-            <p className="text-base-content/65 text-sm">
-              自分の予定を使うには、イベントページで自分の回答を紐付けてから編集してください。
-            </p>
-          )
-        ) : (
-          <a
-            className="link inline-flex min-h-11 items-center text-sm"
-            href={`/auth/signin?callbackUrl=${encodeURIComponent(`/event/${data.event.token}/input${baseline ? `?participant_id=${baseline.id}&kind=${kind}` : `?kind=${kind}`}`)}`}
-          >
-            ログインして自分の予定を使う
-          </a>
-        )}
-        {scheduleMessage && (
-          <p role="status" className="text-sm">
-            {scheduleMessage}
-          </p>
-        )}
-      </div>
       {error && (
         <p role="alert" className="text-error">
           {error}
@@ -497,7 +454,7 @@ export default function DateFirstAnswerEditor({
                               type="button"
                               data-day-status={day.id}
                               data-testid={`day-${day.id}-${status}`}
-                              className={`btn min-w-10 touch-none px-0 ${draft.status === status ? 'btn-primary' : 'btn-ghost'}`}
+                              className={`btn min-h-11 w-10 shrink-0 touch-none px-0 sm:w-11 ${draft.status === status ? 'btn-primary' : 'btn-ghost'}`}
                               aria-label={`${candidateDayLabel(day.date)} ${symbol(status)}`}
                               aria-pressed={draft.status === status}
                               onPointerDown={(e) => startGesture(e, day.id, status)}
@@ -507,14 +464,14 @@ export default function DateFirstAnswerEditor({
                                 changeDay(day.id, { status: next, statusDirty: true });
                               }}
                             >
-                              <Icon size={18} aria-hidden="true" />
+                              <Icon size={20} aria-hidden="true" />
                             </button>
                           );
                         })}
                       </div>
                       <button
                         type="button"
-                        className="btn btn-ghost relative min-h-11 w-10 px-0"
+                        className="btn btn-ghost min-h-11 w-10 shrink-0 px-0 sm:w-11"
                         aria-label={`${candidateDayLabel(day.date)}のコメント${draft.comment ? '（入力済み）' : ''}`}
                         aria-expanded={comments.has(day.id)}
                         disabled={displayStatus === null}
@@ -529,10 +486,12 @@ export default function DateFirstAnswerEditor({
                           });
                         }}
                       >
-                        <MessageSquare size={18} aria-hidden="true" />
-                        {draft.comment && (
-                          <span className="bg-primary absolute right-2 top-2 h-1.5 w-1.5 rounded-full" />
-                        )}
+                        <span className="relative inline-flex" aria-hidden="true">
+                          <MessageSquare size={20} />
+                          {draft.comment && (
+                            <span className="bg-primary absolute -right-0.5 -top-0.5 size-1.5 rounded-full" />
+                          )}
+                        </span>
                       </button>
                     </div>
                     {displayStatus === 'maybe' && (
@@ -619,7 +578,7 @@ export default function DateFirstAnswerEditor({
                           key={String(value)}
                           type="button"
                           data-testid={`time-${slot.id}-${value}`}
-                          className={`btn min-w-14 ${timeValue(slot.id) === value ? 'btn-primary' : 'btn-ghost'}`}
+                          className={`btn min-h-11 w-11 shrink-0 px-0 ${timeValue(slot.id) === value ? 'btn-primary' : 'btn-ghost'}`}
                           aria-label={`${formatDayMinute(slot.start)}〜${formatDayMinute(slot.end)} ${value ? '○' : '×'}`}
                           aria-pressed={timeValue(slot.id) === value}
                           onClick={() =>
@@ -630,9 +589,9 @@ export default function DateFirstAnswerEditor({
                           }
                         >
                           {value ? (
-                            <Circle size={18} aria-hidden="true" />
+                            <Circle size={20} aria-hidden="true" />
                           ) : (
-                            <X size={18} aria-hidden="true" />
+                            <X size={20} aria-hidden="true" />
                           )}
                         </button>
                       ))}
@@ -674,6 +633,15 @@ export default function DateFirstAnswerEditor({
           </div>
         </fieldset>
       </form>
+      <ConfirmationModal
+        isOpen={ready && dayCandidates.length + timeCandidates.length > 0}
+        title="予定を取り込みますか？"
+        description="候補期間に登録済みの予定があります。取り込んだ内容は保存前に確認・修正できます。"
+        confirmLabel="取り込む"
+        cancelLabel="取り込まずに続ける"
+        onConfirm={applySchedule}
+        onCancel={() => setScheduleDismissed(true)}
+      />
       <ConfirmationModal
         isOpen={timeEditor !== null}
         title="△の日の参加可能時間"

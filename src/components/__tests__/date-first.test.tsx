@@ -5,7 +5,6 @@ import DateFirstTimeGrid from '@/components/date-first/time-grid';
 import {
   getDateFirstAnswer,
   getDateFirstDayDetails,
-  getDateFirstScheduleDraft,
   saveDateFirst,
 } from '@/lib/date-first-actions';
 import type { DateFirstAnswer, DateFirstEvent } from '@/lib/date-first-schema';
@@ -17,7 +16,6 @@ jest.mock('@/lib/date-first-actions', () => ({
   saveDateFirst: jest.fn(),
   getDateFirstAnswer: jest.fn(),
   getDateFirstDayDetails: jest.fn(),
-  getDateFirstScheduleDraft: jest.fn(),
 }));
 jest.mock('@/lib/event-history-actions', () => ({
   recordEventHistory: jest.fn().mockResolvedValue({ success: true }),
@@ -304,52 +302,44 @@ it('コメント単独編集では記号・時間・sourceを送信しない', a
     expect.objectContaining({ changes: [{ id: ids[0], comment: 'コメント更新' }] }),
   );
 });
-it('予定は未保存の入力へ取り込み、先に手動入力した日付を保持する', async () => {
-  jest.mocked(getDateFirstScheduleDraft).mockResolvedValue({
-    success: true,
-    draft: {
-      days: [
-        { id: ids[0], status: 'yes', intervals: [] },
-        { id: ids[1], status: 'maybe', intervals: [[660, 720]] },
-      ],
-      times: [],
-    },
-  });
+it.each([true, false])('候補期間の予定は確認後にだけ入力する（取り込む: %s）', (apply) => {
   render(
     <DateFirstAnswerEditor
       data={data}
       initialAnswer={answer}
       kind="days"
-      signedIn
-      canUseSchedule
+      scheduleDraft={{
+        days: [{ id: ids[1], status: 'maybe', intervals: [[660, 720]] }],
+        times: [],
+      }}
     />,
   );
-  fireEvent.click(screen.getByTestId(`day-${ids[0]}-no`), { detail: 0 });
-  fireEvent.click(screen.getByRole('button', { name: '自分の予定を使う' }));
-  await screen.findByText(/予定を取り込みました/);
-  expect(screen.getByTestId(`day-${ids[0]}-no`)).toHaveAttribute('aria-pressed', 'true');
-  expect(screen.getByTestId(`day-${ids[1]}-maybe`)).toHaveAttribute('aria-pressed', 'true');
+  const dialog = screen.getByRole('dialog', { name: '予定を取り込みますか？' });
+  const day = screen.getByTestId(`day-${ids[1]}-maybe`);
+  expect(day).toHaveAttribute('aria-pressed', 'false');
+  fireEvent.click(
+    within(dialog).getByRole('button', { name: apply ? '取り込む' : '取り込まずに続ける' }),
+  );
+  expect(dialog).not.toBeInTheDocument();
+  expect(day).toHaveAttribute('aria-pressed', String(apply));
   expect(saveDateFirst).not.toHaveBeenCalled();
 });
-it('既存の自動回答と同じ予定を取り込んでも、コメントだけの編集を手動回答へ変えない', async () => {
-  jest.mocked(getDateFirstScheduleDraft).mockResolvedValue({
-    success: true,
-    draft: {
-      days: [{ id: ids[0], status: 'maybe', intervals: [[600, 660]] }],
-      times: [],
-    },
-  });
+it('同じ自動回答や未登録の予定では確認を表示せず、コメントだけの編集を維持する', async () => {
   render(
     <DateFirstAnswerEditor
       data={data}
       initialAnswer={answer}
       kind="days"
-      signedIn
-      canUseSchedule
+      scheduleDraft={{
+        days: [
+          { id: ids[0], status: 'maybe', intervals: [[600, 660]] },
+          { id: ids[1], status: null, intervals: [] },
+        ],
+        times: [],
+      }}
     />,
   );
-  fireEvent.click(screen.getByRole('button', { name: '自分の予定を使う' }));
-  await screen.findByText(/入力に反映する変更はありません/);
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: /のコメント（入力済み）/ }));
   fireEvent.change(screen.getByRole('textbox', { name: /のコメント/ }), {
     target: { value: 'コメントだけ更新' },
