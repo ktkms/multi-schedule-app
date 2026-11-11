@@ -100,7 +100,7 @@ describeDatabase('日付先行型の実DB・MCP SDK統合', () => {
   it('既存8ツールで日付・時間の三値と初回補完を扱い、本人の正式時間だけを予定へ保存する', async () => {
     const e = await fixture();
     await schedule(e.user, '2099-11-07 00:00', '2099-11-08 00:00', true);
-    await schedule(e.user, '2099-11-08 10:00', '2099-11-08 22:00', true);
+    await schedule(e.user, '2099-11-08 10:00', '2099-11-08 21:00', true);
     const { server, client } = await connect(e.user);
     try {
       expect((await client.listTools()).tools).toHaveLength(8);
