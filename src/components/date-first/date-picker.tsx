@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import useSelectionDragController from '@/hooks/useSelectionDragController';
 import { candidateDayLabel } from '@/lib/date-first-ui';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 /** 暦日をそのまま選択し、端末由来のUTC変換を保存値へ持ち込まない。 */
 export default function DateFirstDatePicker({
@@ -66,17 +67,18 @@ export default function DateFirstDatePicker({
     date.setUTCMonth(date.getUTCMonth() + amount);
     setMonth(date.toISOString().slice(0, 7));
   };
+  const remaining = Math.max(0, 90 - existing.length - value.length);
   return (
     <div ref={container} className="space-y-4" data-testid="date-first-date-picker">
       <div className="flex items-center justify-between gap-3">
         <button
           type="button"
-          className="btn btn-ghost btn-sm"
+          className="btn btn-ghost btn-square shrink-0"
           onClick={() => move(-1)}
           aria-label="前の月"
           disabled={drag.isDragging || month <= '0001-01'}
         >
-          前月
+          <ChevronLeft size={20} aria-hidden="true" />
         </button>
         <label className="sr-only" htmlFor={monthId}>
           表示月
@@ -95,12 +97,12 @@ export default function DateFirstDatePicker({
         />
         <button
           type="button"
-          className="btn btn-ghost btn-sm"
+          className="btn btn-ghost btn-square shrink-0"
           onClick={() => move(1)}
           aria-label="次の月"
           disabled={drag.isDragging || month >= '9999-12'}
         >
-          翌月
+          <ChevronRight size={20} aria-hidden="true" />
         </button>
       </div>
       <div className="grid grid-cols-7 gap-1">
@@ -139,22 +141,32 @@ export default function DateFirstDatePicker({
         })}
       </div>
       <p className="text-sm" aria-live="polite">
-        {value.length}日選択 / 残り{Math.max(0, 90 - existing.length - value.length)}日追加可能
+        {value.length}日選択中
+        {remaining === 0
+          ? '（上限に達しました）'
+          : remaining <= 10
+            ? `（あと${remaining}日選択できます）`
+            : ''}
       </p>
       {value.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {value.map((day) => (
-            <button
-              key={day}
-              type="button"
-              className="btn btn-sm btn-ghost"
-              aria-label={`${candidateDayLabel(day)}を外す`}
-              onClick={() => onChange(value.filter((d) => d !== day))}
-            >
-              {candidateDayLabel(day)} ×
-            </button>
-          ))}
-        </div>
+        <details>
+          <summary className="min-h-11 cursor-pointer content-center text-sm font-medium">
+            選択した日付を確認・解除
+          </summary>
+          <div className="flex flex-wrap gap-2">
+            {value.map((day) => (
+              <button
+                key={day}
+                type="button"
+                className="btn btn-sm btn-ghost"
+                aria-label={`${candidateDayLabel(day)}を外す`}
+                onClick={() => onChange(value.filter((d) => d !== day))}
+              >
+                {candidateDayLabel(day)} ×
+              </button>
+            ))}
+          </div>
+        </details>
       )}
     </div>
   );

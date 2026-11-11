@@ -3,13 +3,13 @@
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { z } from 'zod';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { saveDateFirst } from '@/lib/date-first-actions';
-import { dateFirstCommandSchema, formatDayMinute } from '@/lib/date-first-schema';
+import { dateFirstCommandSchema } from '@/lib/date-first-schema';
 import {
   candidateDayLabel,
   dayIntervalText,
   mergeDayIntervals,
-  parseDayMinute,
   type DayInterval,
 } from '@/lib/date-first-ui';
 import { addEventToHistory } from '@/lib/utils';
@@ -17,7 +17,6 @@ import { recordEventHistory } from '@/lib/event-history-actions';
 import WizardProgress from '@/components/common/wizard-progress';
 import TermsCheckbox from '@/components/terms/terms-checkbox';
 import DateFirstDatePicker from './date-picker';
-import DateFirstTimeInput from './time-input';
 
 const steps = [{ label: 'イベント情報' }, { label: '候補日を選ぶ' }, { label: '内容を確認' }];
 const presets: { label: string; range: DayInterval }[] = [
@@ -36,7 +35,8 @@ export default function DateFirstCreate() {
     [title, setTitle] = useState(''),
     [description, setDescription] = useState('');
   const [days, setDays] = useState<string[]>([]),
-    [ranges, setRanges] = useState<DayInterval[]>([[600, 1320]]);
+    [ranges, setRanges] = useState<DayInterval[]>([]);
+  const [reviewMonth, setReviewMonth] = useState('');
   const [selectedPresets, setSelectedPresets] = useState<string[]>([]);
   const [start, setStart] = useState('10:00'),
     [end, setEnd] = useState('22:00');
@@ -44,6 +44,13 @@ export default function DateFirstCreate() {
     [error, setError] = useState('');
   const [pending, startTransition] = useTransition();
   const request = useRef<string | null>(null);
+  const months = [...new Set(days.map((day) => day.slice(0, 7)))].sort();
+  const month = months.includes(reviewMonth) ? reviewMonth : months[0];
+  const monthIndex = months.indexOf(month);
+  const firstDay = month ? new Date(`${month}-01T00:00:00Z`) : null;
+  const lastDay = firstDay ? new Date(firstDay) : null;
+  lastDay?.setUTCMonth(lastDay.getUTCMonth() + 1, 0);
+  const daysInMonth = lastDay?.getUTCDate() ?? 0;
   const build = () => ({
     operation: 'create' as const,
     requestId: request.current ?? '00000000-0000-4000-8000-000000000000',
@@ -61,6 +68,10 @@ export default function DateFirstCreate() {
         Array.from(description).length > 5000)
     ) {
       setError('イベント名は200文字以内、説明は5000文字以内で入力してください。');
+      return;
+    }
+    if (step === 2 && ranges.length === 0) {
+      setError('時間帯を選択してください。');
       return;
     }
     if (step === 2 && !dateFirstCommandSchema.safeParse(build()).success) {
@@ -141,10 +152,10 @@ export default function DateFirstCreate() {
             <DateFirstDatePicker value={days} onChange={setDays} />
             <section aria-labelledby="date-first-base-time-heading">
               <h3 id="date-first-base-time-heading" className="font-medium">
-                △回答の時間帯（任意）
+                時間帯（必須）
               </h3>
               <p className="text-base-content/65 mt-1 text-sm">
-                回答者が△を選んだとき、最初に表示する時間帯です。
+                空いている必要のある時間帯です。予定する大まかな時間を選択してください。
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {presets.map((p) => {
@@ -174,8 +185,12 @@ export default function DateFirstCreate() {
                         setRanges(nextRanges);
                         if (nextRanges.length <= 1) {
                           const [lo, hi] = nextRanges[0] ?? [600, 1320];
-                          setStart(formatDayMinute(lo).padStart(5, '0'));
-                          setEnd(formatDayMinute(hi).padStart(5, '0'));
+                          setStart(
+                            `${String(Math.floor(lo / 60)).padStart(2, '0')}:${String(lo % 60).padStart(2, '0')}`,
+                          );
+                          setEnd(
+                            `${String(Math.floor(hi / 60)).padStart(2, '0')}:${String(hi % 60).padStart(2, '0')}`,
+                          );
                         }
                         setError('');
                       }}
@@ -186,26 +201,59 @@ export default function DateFirstCreate() {
                   );
                 })}
               </div>
-              <p className="mt-3 text-sm">
-                表示する時間帯：{dayIntervalText(ranges) || '10:00〜22:00（標準）'}
-              </p>
+              <p className="mt-3 text-sm">選択した時間帯：{dayIntervalText(ranges) || '未選択'}</p>
               <details className="mt-2">
                 <summary className="min-h-11 cursor-pointer content-center text-sm font-medium">
                   時刻を指定
                 </summary>
                 <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                  <DateFirstTimeInput label="表示開始" value={start} onChange={setStart} />
-                  <DateFirstTimeInput label="表示終了" value={end} onChange={setEnd} />
+                  {[
+                    { label: '開始', value: start, setValue: setStart },
+                    { label: '終了', value: end, setValue: setEnd },
+                  ].map(({ label, value, setValue }) => {
+                    const [hour, minute] = value.split(':');
+                    return (
+                      <fieldset key={label} className="min-w-0 space-y-2">
+                        <legend className="mb-2 text-sm">{label}時刻</legend>
+                        <div className="flex items-center gap-2">
+                          <select
+                            className="select min-w-0 flex-1"
+                            aria-label={`${label}の時`}
+                            value={hour}
+                            onChange={(event) => setValue(`${event.target.value}:${minute}`)}
+                          >
+                            {Array.from({ length: 27 }, (_, i) => (
+                              <option key={i} value={String(i).padStart(2, '0')}>
+                                {i}時
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            className="select min-w-0 flex-1"
+                            aria-label={`${label}の分`}
+                            value={minute}
+                            onChange={(event) => setValue(`${hour}:${event.target.value}`)}
+                          >
+                            {Array.from({ length: 60 }, (_, i) => (
+                              <option key={i} value={String(i).padStart(2, '0')}>
+                                {String(i).padStart(2, '0')}分
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </fieldset>
+                    );
+                  })}
                   <button
                     type="button"
                     className="btn btn-outline justify-self-start sm:col-span-2"
                     onClick={() => {
-                      const lo = parseDayMinute(start),
-                        hi = parseDayMinute(end);
-                      if (lo === null || hi === null || lo >= hi)
-                        setError(
-                          '開始時刻より後の終了時刻を選んでください。翌日は6:00まで指定できます。',
-                        );
+                      const [startHour, startMinute] = start.split(':').map(Number);
+                      const [endHour, endMinute] = end.split(':').map(Number);
+                      const lo = startHour * 60 + startMinute;
+                      const hi = endHour * 60 + endMinute;
+                      if (lo >= hi || hi > 1560)
+                        setError('開始時刻より後、26:00までの終了時刻を選んでください。');
                       else {
                         setRanges([[lo, hi]]);
                         setSelectedPresets(
@@ -220,7 +268,7 @@ export default function DateFirstCreate() {
                     この時間帯を使う
                   </button>
                 </div>
-                <p className="text-base-content/65 mt-2 text-sm">翌日は6:00まで指定できます。</p>
+                <p className="text-base-content/65 mt-2 text-sm">24時以降は翌日の時刻です。</p>
               </details>
             </section>
           </>
@@ -241,14 +289,87 @@ export default function DateFirstCreate() {
               <div>
                 <dt className="text-base-content/65 text-sm">候補日（{days.length}日）</dt>
                 <dd className="mt-2" data-testid="date-first-create-days">
-                  <ul className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
-                    {days.map((day) => (
-                      <li key={day} className="whitespace-nowrap">
-                        {candidateDayLabel(day)}
-                      </li>
-                    ))}
-                  </ul>
+                  {firstDay && (
+                    <div className="max-w-sm">
+                      {months.length > 1 ? (
+                        <div className="flex items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-square"
+                            aria-label="前の候補月"
+                            disabled={monthIndex === 0}
+                            onClick={() => setReviewMonth(months[monthIndex - 1])}
+                          >
+                            <ChevronLeft size={20} aria-hidden="true" />
+                          </button>
+                          <label className="sr-only" htmlFor="review-month">
+                            確認する月
+                          </label>
+                          <select
+                            id="review-month"
+                            className="select w-auto"
+                            value={month}
+                            onChange={(event) => setReviewMonth(event.target.value)}
+                          >
+                            {months.map((item) => (
+                              <option key={item} value={item}>
+                                {item.slice(0, 4)}年{Number(item.slice(5))}月（
+                                {days.filter((day) => day.startsWith(item)).length}日）
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-square"
+                            aria-label="次の候補月"
+                            disabled={monthIndex === months.length - 1}
+                            onClick={() => setReviewMonth(months[monthIndex + 1])}
+                          >
+                            <ChevronRight size={20} aria-hidden="true" />
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="py-2 text-center text-sm font-medium">
+                          {month.slice(0, 4)}年{Number(month.slice(5))}月
+                        </p>
+                      )}
+                      <div
+                        className="mt-1 grid grid-cols-7 gap-y-1 text-center text-sm"
+                        role="img"
+                        aria-label={`候補日：${days
+                          .filter((day) => day.startsWith(month))
+                          .map(candidateDayLabel)
+                          .join('、')}`}
+                      >
+                        {['日', '月', '火', '水', '木', '金', '土'].map((weekday) => (
+                          <span key={weekday} className="text-base-content/65 py-1">
+                            {weekday}
+                          </span>
+                        ))}
+                        {Array.from({ length: firstDay.getUTCDay() }, (_, index) => (
+                          <span key={`blank-${index}`} />
+                        ))}
+                        {Array.from({ length: daysInMonth }, (_, index) => {
+                          const day = `${month}-${String(index + 1).padStart(2, '0')}`;
+                          const selected = days.includes(day);
+                          return (
+                            <span key={day} className="flex justify-center">
+                              <span
+                                className={`flex size-8 items-center justify-center rounded ${selected ? 'bg-primary text-primary-content font-semibold' : 'text-base-content/35'}`}
+                              >
+                                {index + 1}
+                              </span>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </dd>
+              </div>
+              <div>
+                <dt className="text-base-content/65 text-sm">時間帯</dt>
+                <dd className="mt-1">{dayIntervalText(ranges)}</dd>
               </div>
             </dl>
             <TermsCheckbox isChecked={accepted} onChange={setAccepted} />

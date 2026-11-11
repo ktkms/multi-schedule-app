@@ -64,7 +64,7 @@ export const dateFirstCommandSchema = z
           .min(1)
           .max(90)
           .refine((value) => new Set(value).size === value.length),
-        baseRanges: intervals.default([[600, 1320]]),
+        baseRanges: intervals.min(1).default([[600, 1320]]),
       })
       .strict(),
     z

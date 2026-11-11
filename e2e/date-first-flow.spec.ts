@@ -11,12 +11,25 @@ test('日付回答から詳細時間・確定・解除・カレンダーまで�
   const editor = page.locator('[data-testid="date-first-answer"]:visible');
   const finalization = page.locator('[data-testid="date-first-finalization"]:visible');
   const results = page.locator('[data-testid="date-first-event"]:visible');
-  await page.goto('/create?mode=date');
+  await page.goto('/create');
+  const picker = page.getByTestId('create-mode-picker');
+  await expect(page.getByTestId('create-step-1')).toHaveCount(0);
+  await picker.getByRole('radio', { name: '時間まで調整' }).check();
+  await picker.getByTestId('create-mode-next').click();
+  await expect(page.getByTestId('create-step-1')).toBeVisible();
+  await page.getByRole('button', { name: '調整方法を選び直す' }).click();
+  await page
+    .getByRole('dialog', { name: '調整方法を選び直しますか？' })
+    .getByRole('button', { name: '選び直す' })
+    .click();
+  await picker.getByRole('radio', { name: '日付を調整' }).check();
+  await picker.getByTestId('create-mode-next').click();
   await page.getByTestId('date-first-title').fill(`日付先行E2E ${randomUUID().slice(0, 8)}`);
   await page.getByTestId('date-first-create-next').click();
   await page.getByLabel('表示月').fill('2099-11');
   await page.getByTestId('candidate-date-2099-11-07').click();
   await page.getByTestId('candidate-date-2099-11-08').click();
+  await page.getByRole('button', { name: '昼（12〜18時）' }).click();
   await page.getByTestId('date-first-create-next').click();
   await page.getByLabel(/利用規約/).check();
   await page.getByTestId('date-first-create-next').click();
