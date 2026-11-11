@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import DateFirstDayHeatmap from '@/components/date-first/day-heatmap';
 import type { DateFirstEvent } from '@/lib/date-first-schema';
 
@@ -68,9 +68,12 @@ it('回答がない候補日には人数を表示せず、回答済みの○0と
   expect(screen.getByTestId('day-results-empty')).toHaveAccessibleName(/回答なし、未回答2人/);
   expect(screen.getByTestId('day-results-conditional')).toHaveTextContent('○0');
   expect(screen.getByTestId('day-results-conditional')).toHaveTextContent('△1');
+  fireEvent.click(screen.getByRole('button', { name: 'リスト' }));
+  expect(screen.getByTestId('day-results-empty')).not.toHaveTextContent('未回答2');
+  expect(screen.getByTestId('day-results-empty')).toHaveAccessibleName(/回答なし、未回答2人/);
 });
 
-it('複数の候補月があることを示し、月送りで候補月だけを切り替える', () => {
+it('候補のある月を時系列に縦積みし、候補の最終週まで表示する', () => {
   const days: DateFirstEvent['days'] = ['2026-11-07', '2027-01-08'].map((date, i) => ({
     id: `day-${i}`,
     date,
@@ -90,9 +93,59 @@ it('複数の候補月があることを示し、月送りで候補月だけを�
       onLeave={jest.fn()}
     />,
   );
-  expect(screen.getByText('候補月 1 / 2')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '次の候補月' }));
-  expect(screen.getByLabelText('回答を表示する月')).toHaveValue('2027-01');
-  expect(screen.getByText('候補月 2 / 2')).toBeInTheDocument();
+  expect(screen.getByRole('region', { name: '2026年11月' })).toBeInTheDocument();
+  expect(screen.getByRole('region', { name: '2027年1月' })).toBeInTheDocument();
+  expect(screen.queryByText('候補月 1 / 2')).not.toBeInTheDocument();
   expect(screen.getByTestId('day-results-day-1')).toBeInTheDocument();
+  const january = screen.getByRole('region', { name: '2027年1月' });
+  expect(within(january).getByRole('button', { name: /2027\/1\/8/ })).toBeInTheDocument();
+  expect(within(january).getByText('9', { exact: true })).toBeInTheDocument();
+  expect(within(january).queryByText('10', { exact: true })).not.toBeInTheDocument();
+});
+
+it('月をまたぐ候補日をリストで月別に表示し、切り替え時に詳細を閉じる', () => {
+  const days: DateFirstEvent['days'] = ['2026-12-31', '2027-01-02'].map((date, i) => ({
+    id: `day-${i}`,
+    date,
+    confirmed: i === 1,
+    target: true,
+    yes: 1,
+    maybe: 1,
+    no: 0,
+    unanswered: 0,
+    hasComment: true,
+  }));
+  const close = jest.fn();
+  render(
+    <DateFirstDayHeatmap
+      days={days}
+      participantCount={2}
+      activeDayId={null}
+      onInspect={jest.fn()}
+      onLeave={jest.fn()}
+      onViewChange={close}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'リスト' }));
+  expect(close).toHaveBeenCalled();
+  expect(screen.getByTestId('date-first-list-view')).toBeInTheDocument();
+  expect(screen.getByTestId('day-results-day-0')).toHaveAccessibleName(/2026\/12\/31\(木\)/);
+  expect(screen.getByTestId('day-results-day-1')).toHaveAccessibleName(
+    /2027\/1\/2\(土\).*確定済み.*コメントあり/,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'カレンダー' }));
+  expect(screen.getByTestId('date-first-calendar-view')).toBeInTheDocument();
+});
+
+it('候補日がない場合は空状態を表示する', () => {
+  render(
+    <DateFirstDayHeatmap
+      days={[]}
+      participantCount={0}
+      activeDayId={null}
+      onInspect={jest.fn()}
+      onLeave={jest.fn()}
+    />,
+  );
+  expect(screen.getByText('候補日はまだありません。')).toBeInTheDocument();
 });

@@ -242,6 +242,10 @@ export default function DateFirstEventView({
     if (inspection?.pinned) detailAnchor.current?.focus();
     setInspection(null);
   };
+  const changeHeatmapView = () => {
+    keepDetails();
+    setInspection(null);
+  };
   const leaveDetails = () => {
     if (inspection?.pinned) return;
     keepDetails();
@@ -418,11 +422,12 @@ export default function DateFirstEventView({
               : `参加者${data.participants.length}人`}
           </p>
         </div>
-        <div className="max-w-3xl">
+        <div className="mx-auto max-w-3xl">
           <DateFirstDayHeatmap
             days={displayDays}
             participantCount={visibleParticipants.length}
             activeDayId={inspection?.id ?? null}
+            onViewChange={changeHeatmapView}
             onInspect={(id, anchor, pinned) => {
               if (!pinned && (isMobile || inspection?.pinned)) return;
               keepDetails();
@@ -432,12 +437,26 @@ export default function DateFirstEventView({
               }
               const rect = anchor.getBoundingClientRect();
               const width = Math.min(384, window.innerWidth - 16);
+              const right = window.innerWidth - rect.right;
+              const left = rect.left;
+              const panelLeft =
+                right >= width + 8
+                  ? rect.right + 8
+                  : left >= width + 8
+                    ? rect.left - width - 8
+                    : Math.max(
+                        8,
+                        Math.min(
+                          rect.left + rect.width / 2 - width / 2,
+                          window.innerWidth - width - 8,
+                        ),
+                      );
               detailAnchor.current = anchor;
               setInspection({
                 id,
                 pinned,
                 width,
-                left: Math.max(8, Math.min(rect.right + 8, window.innerWidth - width - 8)),
+                left: panelLeft,
                 top: Math.max(64, Math.min(rect.top, window.innerHeight * 0.4)),
               });
             }}
@@ -453,11 +472,16 @@ export default function DateFirstEventView({
               role="dialog"
               aria-modal="false"
               aria-label={`${candidateDayLabel(inspectedDay.date)}の回答詳細`}
-              className="bg-base-100 border-base-300 fixed z-50 max-h-[55dvh] overflow-y-auto rounded-md border p-3"
+              className={`bg-base-100 border-base-300 fixed z-50 max-h-[55dvh] overflow-y-auto rounded-md border p-3 ${isMobile ? 'shadow-lg' : ''}`}
               style={
                 isMobile
                   ? { top: 'calc(env(safe-area-inset-top, 0px) + 64px)', left: 8, right: 8 }
-                  : { top: inspection.top, left: inspection.left, width: inspection.width }
+                  : {
+                      top: inspection.top,
+                      left: inspection.left,
+                      width: inspection.width,
+                      pointerEvents: inspection.pinned ? 'auto' : 'none',
+                    }
               }
               onPointerEnter={keepDetails}
               onPointerLeave={leaveDetails}
@@ -468,8 +492,12 @@ export default function DateFirstEventView({
                 }
               }}
             >
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="font-medium">{candidateDayLabel(inspectedDay.date)}</h3>
+              <div
+                className={`flex items-center justify-between gap-3 ${isMobile ? 'bg-base-100 sticky -top-3 z-10 -mx-3 -mt-3 border-b px-3 py-2' : ''}`}
+              >
+                <h3 className="text-base font-semibold leading-6">
+                  {candidateDayLabel(inspectedDay.date)}
+                </h3>
                 <button
                   type="button"
                   className="btn btn-ghost btn-square"
@@ -479,12 +507,24 @@ export default function DateFirstEventView({
                   <X size={20} aria-hidden="true" />
                 </button>
               </div>
-              <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm tabular-nums">
-                <span>○{inspectedDay.yes}</span>
-                <span>△{inspectedDay.maybe}</span>
-                <span>×{inspectedDay.no}</span>
-                <span>未回答{inspectedDay.unanswered}</span>
-              </p>
+              <dl className="grid grid-cols-2 gap-x-6 gap-y-1 border-y py-2 text-sm">
+                <div className="flex items-baseline justify-between gap-2">
+                  <dt>参加可能</dt>
+                  <dd className="font-medium tabular-nums">{inspectedDay.yes}人</dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-2">
+                  <dt>未定</dt>
+                  <dd className="font-medium tabular-nums">{inspectedDay.maybe}人</dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-2">
+                  <dt>参加不可</dt>
+                  <dd className="font-medium tabular-nums">{inspectedDay.no}人</dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-2">
+                  <dt>未回答</dt>
+                  <dd className="font-medium tabular-nums">{inspectedDay.unanswered}人</dd>
+                </div>
+              </dl>
               <DayResults
                 key={`${inspectedDay.id}:${inspectedDay.yes + inspectedDay.maybe + inspectedDay.no > 0}`}
                 token={token}

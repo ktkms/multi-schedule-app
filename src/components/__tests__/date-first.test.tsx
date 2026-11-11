@@ -252,7 +252,7 @@ it('回答のない日は取得済みの参加者をすぐに表示し、後か�
   fireEvent.click(screen.getByTestId(`day-results-${ids[0]}`));
   const panel = within(screen.getByRole('dialog', { name: /回答詳細/ }));
   expect(panel.getByText('参加者')).toBeInTheDocument();
-  expect(panel.getByText('未回答', { exact: true })).toBeInTheDocument();
+  expect(within(panel.getByRole('list')).getByText('未回答', { exact: true })).toBeInTheDocument();
   expect(getDateFirstDayDetails).toHaveBeenCalledTimes(1);
   await act(async () =>
     finish([{ id: participant, name: '参加者', status: 'yes', comment: null, intervals: [] }]),
@@ -345,6 +345,35 @@ it('詳細パネルで回答とコメントを確認し、別のマスへ切り�
   expect(screen.queryByText('詳細コメント')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '参加者さんのコメント' }));
   expect(screen.getByText('詳細コメント')).toBeInTheDocument();
+});
+
+it('ホバー詳細は画面端でアンカーの反対側へ置き、隣の候補へ移動できる', () => {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
+  render(<DateFirstEventView data={data} />);
+  const first = screen.getByTestId(`day-results-${ids[0]}`);
+  const second = screen.getByTestId(`day-results-${ids[1]}`);
+  jest.spyOn(first, 'getBoundingClientRect').mockReturnValue({
+    x: 1200,
+    y: 160,
+    left: 1200,
+    right: 1232,
+    top: 160,
+    bottom: 192,
+    width: 32,
+    height: 32,
+    toJSON: () => ({}),
+  });
+
+  fireEvent.pointerEnter(first, { pointerType: 'mouse' });
+  const hoverPanel = screen.getByRole('dialog', { name: /2026\/11\/7.*回答詳細/ });
+  expect(hoverPanel).toHaveStyle({ left: '808px', pointerEvents: 'none' });
+
+  fireEvent.pointerEnter(second, { pointerType: 'mouse' });
+  expect(screen.getByRole('dialog', { name: /2026\/11\/8.*回答詳細/ })).toBeInTheDocument();
+  fireEvent.click(second);
+  expect(screen.getByRole('dialog', { name: /2026\/11\/8.*回答詳細/ })).toHaveStyle({
+    pointerEvents: 'auto',
+  });
 });
 
 it('同じ記号の単独再タップは未回答にし、別日付を送信しない', async () => {
