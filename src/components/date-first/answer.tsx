@@ -92,6 +92,8 @@ export default function DateFirstAnswerEditor({
   const [error, setError] = useState(''),
     [accepted, setAccepted] = useState(false),
     [confirm, setConfirm] = useState(false);
+  const [showValidation, setShowValidation] = useState(false);
+  const [showUnanswered, setShowUnanswered] = useState(false);
   const [latest, setLatest] = useState<DateFirstAnswer | null>(null),
     [leaving, setLeaving] = useState<string | null>(null);
   const [showProposals, setShowProposals] = useState(false),
@@ -102,7 +104,10 @@ export default function DateFirstAnswerEditor({
   const request = useRef<string | null>(null),
     saved = useRef(false),
     commentFocus = useRef<string | null>(null),
-    container = useRef<HTMLDivElement>(null);
+    container = useRef<HTMLDivElement>(null),
+    nameInput = useRef<HTMLInputElement>(null),
+    termsControl = useRef<HTMLDivElement>(null),
+    noSlots = useRef<HTMLParagraphElement>(null);
   const gesture = useRef<null | {
     pointerId: number;
     id: string;
@@ -308,6 +313,12 @@ export default function DateFirstAnswerEditor({
     Object.hasOwn(times, id)
       ? times[id]
       : (baseline?.times.find((t) => t.id === id)?.availability ?? null);
+  const invalidName = !name.trim() || Array.from(name.trim()).length > 100;
+  const unansweredDays = data.days.filter((day) => {
+    if (kind === 'days') return days[day.id].status === null;
+    const slots = data.slots.filter((slot) => slot.dayId === day.id);
+    return day.target && slots.length > 0 && slots.every((slot) => timeValue(slot.id) === null);
+  });
   const proposals = data.slots.filter(
     (slot) =>
       !baseline?.times.some((t) => t.id === slot.id) &&
@@ -413,21 +424,51 @@ export default function DateFirstAnswerEditor({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          setConfirm(true);
+          setShowValidation(true);
+          if (invalidName) {
+            nameInput.current?.focus();
+            return;
+          }
+          if (kind === 'times' && data.slots.length === 0) {
+            noSlots.current?.focus();
+            return;
+          }
+          if (!accepted) {
+            termsControl.current?.querySelector('input')?.focus();
+            return;
+          }
+          if (unansweredDays.length > 0) setShowUnanswered(true);
+          else setConfirm(true);
         }}
         className="space-y-6"
+        noValidate
       >
         <fieldset disabled={!ready || pending} className="space-y-5">
           <label className="block space-y-2">
             <span>お名前</span>
             <input
               data-testid="date-first-answer-name"
+              ref={nameInput}
               className="input w-full"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
+              aria-invalid={showValidation && invalidName}
+              aria-describedby={showValidation && invalidName ? 'date-first-name-error' : undefined}
             />
+            {showValidation && invalidName && (
+              <span id="date-first-name-error" className="text-error block text-sm" role="alert">
+                {!name.trim()
+                  ? 'お名前を入力してください。'
+                  : 'お名前は100文字以内で入力してください。'}
+              </span>
+            )}
           </label>
+          {kind === 'days' && data.event.baseRanges.length > 0 && (
+            <p className="text-base-content/70 text-sm">
+              予定する時間帯：{dayIntervalText(data.event.baseRanges)}
+            </p>
+          )}
           {kind === 'days' ? (
             <div ref={container} className="max-w-xl space-y-4">
               {data.days.map((day) => {
@@ -599,11 +640,20 @@ export default function DateFirstAnswerEditor({
                   </div>
                 ))}
               {data.slots.length === 0 && (
-                <p>時間候補はまだありません。イベント画面で候補を設定してください。</p>
+                <p ref={noSlots} tabIndex={-1}>
+                  時間候補はまだありません。イベント画面で候補を設定してください。
+                </p>
               )}
             </div>
           )}
-          <TermsCheckbox isChecked={accepted} onChange={setAccepted} />
+          <div ref={termsControl}>
+            <TermsCheckbox isChecked={accepted} onChange={setAccepted} />
+          </div>
+          {showValidation && !accepted && (
+            <p className="text-error text-sm" role="alert">
+              利用規約への同意が必要です。
+            </p>
+          )}
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
@@ -621,18 +671,31 @@ export default function DateFirstAnswerEditor({
               type="submit"
               data-testid="date-first-answer-review"
               className="btn btn-primary"
-              disabled={
-                !accepted ||
-                dragging ||
-                !name.trim() ||
-                (kind === 'times' && data.slots.length === 0)
-              }
+              disabled={dragging}
             >
               {pending ? '保存中…' : '回答を確認'}
             </button>
           </div>
         </fieldset>
       </form>
+      <ConfirmationModal
+        isOpen={showUnanswered}
+        title="未回答の日があります"
+        description={`${unansweredDays.length}日が未回答です。このまま回答を確認しますか？`}
+        confirmLabel="このまま確認"
+        cancelLabel="入力に戻る"
+        onCancel={() => setShowUnanswered(false)}
+        onConfirm={() => {
+          setShowUnanswered(false);
+          setConfirm(true);
+        }}
+      >
+        <ul className="max-h-40 space-y-1 overflow-y-auto text-sm">
+          {unansweredDays.map((day) => (
+            <li key={day.id}>{candidateDayLabel(day.date)}</li>
+          ))}
+        </ul>
+      </ConfirmationModal>
       <ConfirmationModal
         isOpen={ready && dayCandidates.length + timeCandidates.length > 0}
         title="予定を取り込みますか？"

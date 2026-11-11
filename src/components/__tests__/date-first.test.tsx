@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import DateFirstAnswerEditor from '@/components/date-first/answer';
 import DateFirstEventView from '@/components/date-first/event';
 import DateFirstTimeGrid from '@/components/date-first/time-grid';
@@ -83,9 +83,14 @@ beforeEach(() => {
     message: '入力を保持しています',
   });
 });
+const continuePastUnanswered = () => {
+  const warning = screen.queryByRole('dialog', { name: '未回答の日があります' });
+  if (warning) fireEvent.click(within(warning).getByRole('button', { name: 'このまま確認' }));
+};
 const reviewAndSave = async () => {
   fireEvent.click(screen.getByLabelText(/利用規約/));
   fireEvent.click(screen.getByTestId('date-first-answer-review'));
+  continuePastUnanswered();
   fireEvent.click(
     within(screen.getByRole('dialog', { name: '回答を保存する' })).getByRole('button', {
       name: 'この内容で保存',
@@ -93,6 +98,47 @@ const reviewAndSave = async () => {
   );
   await waitFor(() => expect(saveDateFirst).toHaveBeenCalled());
 };
+it('未入力の必須項目を表示し、修正する入力欄へフォーカスする', () => {
+  render(<DateFirstAnswerEditor data={data} initialAnswer={null} kind="days" />);
+  const review = screen.getByTestId('date-first-answer-review');
+  expect(review).toBeEnabled();
+  fireEvent.click(review);
+  expect(screen.getByText('お名前を入力してください。')).toBeInTheDocument();
+  expect(screen.getByText('利用規約への同意が必要です。')).toBeInTheDocument();
+  expect(screen.getByTestId('date-first-answer-name')).toHaveFocus();
+  fireEvent.change(screen.getByTestId('date-first-answer-name'), { target: { value: '参加者' } });
+  fireEvent.click(review);
+  expect(screen.getByLabelText(/利用規約/)).toHaveFocus();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+it('未回答の日付を確認して入力に戻るかプレビューへ進める', () => {
+  render(<DateFirstAnswerEditor data={data} initialAnswer={answer} kind="days" />);
+  fireEvent.click(screen.getByLabelText(/利用規約/));
+  fireEvent.click(screen.getByTestId('date-first-answer-review'));
+  const warning = within(screen.getByRole('dialog', { name: '未回答の日があります' }));
+  expect(warning.getByText('2日が未回答です。このまま回答を確認しますか？')).toBeInTheDocument();
+  expect(warning.getByText('2026/11/8(日)')).toBeInTheDocument();
+  fireEvent.click(warning.getByRole('button', { name: '入力に戻る' }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByTestId('date-first-answer-review'));
+  continuePastUnanswered();
+  expect(screen.getByRole('dialog', { name: '回答を保存する' })).toBeInTheDocument();
+  expect(saveDateFirst).not.toHaveBeenCalled();
+});
+
+it('詳細時間では一つも回答していない対象日を知らせる', () => {
+  render(<DateFirstAnswerEditor data={data} initialAnswer={answer} kind="times" />);
+  fireEvent.click(screen.getByLabelText(/利用規約/));
+  fireEvent.click(screen.getByTestId('date-first-answer-review'));
+  expect(screen.getByRole('dialog', { name: '未回答の日があります' })).toHaveTextContent(
+    '2026/11/7(土)',
+  );
+  fireEvent.click(screen.getByRole('button', { name: '入力に戻る' }));
+  fireEvent.click(screen.getByTestId(`time-${slots[0]}-true`));
+  fireEvent.click(screen.getByTestId('date-first-answer-review'));
+  expect(screen.getByRole('dialog', { name: '回答を保存する' })).toBeInTheDocument();
+});
 it('表示の拡張だけでは回答を変更せず、当日0時から翌6時の境界で止める', () => {
   const change = jest.fn();
   render(<DateFirstTimeGrid id="grid" value={[]} baseRanges={[[0, 1440]]} onChange={change} />);
@@ -112,6 +158,7 @@ it('既存回答を変更せず確認しても、全未回答と表示しない'
   render(<DateFirstAnswerEditor data={data} initialAnswer={answer} kind="days" />);
   fireEvent.click(screen.getByLabelText(/利用規約/));
   fireEvent.click(screen.getByTestId('date-first-answer-review'));
+  continuePastUnanswered();
   expect(screen.getByRole('dialog')).toHaveTextContent('日付の回答は変更しません。');
   expect(screen.getByRole('dialog')).not.toHaveTextContent('日付はすべて未回答です。');
 });
@@ -124,6 +171,7 @@ it('日付回答のプレビューで、日付・△・時間条件・コメン�
   });
   fireEvent.click(screen.getByLabelText(/利用規約/));
   fireEvent.click(screen.getByTestId('date-first-answer-review'));
+  continuePastUnanswered();
   const modal = within(screen.getByRole('dialog', { name: '回答を保存する' }));
   expect(modal.getAllByText('2026/11/7(土)')).toHaveLength(1);
   expect(modal.getByRole('img', { name: '△' })).toBeInTheDocument();
@@ -186,6 +234,89 @@ it('過去に△だった日でも、ドラッグ中に時間欄を再展開せ�
   fireEvent.pointerUp(window, { pointerId: 2 });
   expect(document.querySelectorAll('[data-time-grid]')).toHaveLength(1);
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+it('回答のない日は取得済みの参加者をすぐに表示し、後から届いた回答で更新する', async () => {
+  let finish!: (value: Awaited<ReturnType<typeof getDateFirstDayDetails>>) => void;
+  jest.mocked(getDateFirstDayDetails).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const emptyData = {
+    ...data,
+    days: data.days.map((day) => ({ ...day, yes: 0, maybe: 0, no: 0, unanswered: 1 })),
+  };
+  render(<DateFirstEventView data={emptyData} />);
+  fireEvent.click(screen.getByTestId(`day-results-${ids[0]}`));
+  const panel = within(screen.getByRole('dialog', { name: /回答詳細/ }));
+  expect(panel.getByText('参加者')).toBeInTheDocument();
+  expect(panel.getByText('未回答', { exact: true })).toBeInTheDocument();
+  expect(getDateFirstDayDetails).toHaveBeenCalledTimes(1);
+  await act(async () =>
+    finish([{ id: participant, name: '参加者', status: 'yes', comment: null, intervals: [] }]),
+  );
+  expect(panel.getByText('○', { exact: true })).toBeInTheDocument();
+});
+
+it('参加者がいない日も通信せず、空の状態をすぐに表示する', () => {
+  const emptyData = {
+    ...data,
+    participants: [],
+    days: data.days.map((day) => ({ ...day, yes: 0, maybe: 0, no: 0, unanswered: 0 })),
+  };
+  render(<DateFirstEventView data={emptyData} />);
+  fireEvent.click(screen.getByTestId(`day-results-${ids[0]}`));
+  expect(screen.getByText('まだ回答はありません。')).toBeInTheDocument();
+  expect(getDateFirstDayDetails).not.toHaveBeenCalled();
+});
+
+it('詳細取得に失敗しても参加者名を表示し、再試行できる', async () => {
+  jest
+    .mocked(getDateFirstDayDetails)
+    .mockRejectedValueOnce(new Error('failed'))
+    .mockResolvedValueOnce([
+      { id: participant, name: '参加者', status: 'yes', comment: null, intervals: [] },
+    ]);
+  render(<DateFirstEventView data={data} />);
+  fireEvent.click(screen.getByTestId(`day-results-${ids[0]}`));
+  const panel = within(screen.getByRole('dialog', { name: /回答詳細/ }));
+  expect(await panel.findByRole('alert')).toHaveTextContent('回答の詳細を取得できませんでした。');
+  expect(panel.getByText('参加者')).toBeInTheDocument();
+  fireEvent.click(panel.getByRole('button', { name: '再試行' }));
+  await waitFor(() => expect(getDateFirstDayDetails).toHaveBeenCalledTimes(2));
+  expect(await panel.findByText('○', { exact: true })).toBeInTheDocument();
+});
+
+it('回答を取得中も参加者を表示し、受信後に回答とコメントを表示する', async () => {
+  let finish!: (value: Awaited<ReturnType<typeof getDateFirstDayDetails>>) => void;
+  jest.mocked(getDateFirstDayDetails).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  render(<DateFirstEventView data={data} />);
+  fireEvent.click(screen.getByTestId(`day-results-${ids[0]}`));
+  const panel = within(screen.getByRole('dialog', { name: /回答詳細/ }));
+  expect(panel.getByText('参加者')).toBeInTheDocument();
+  expect(panel.getByRole('status')).toHaveTextContent('回答を読み込み中');
+  expect(getDateFirstDayDetails).toHaveBeenCalledTimes(1);
+  await act(async () =>
+    finish([
+      {
+        id: participant,
+        name: '参加者',
+        status: 'maybe',
+        comment: '詳細コメント',
+        intervals: [[600, 660]],
+      },
+    ]),
+  );
+  expect(await panel.findByText('10:00〜11:00')).toBeInTheDocument();
+  fireEvent.click(panel.getByRole('button', { name: '参加者さんのコメント' }));
+  expect(panel.getByText('詳細コメント')).toBeInTheDocument();
 });
 
 it('詳細パネルで回答とコメントを確認し、別のマスへ切り替えると表示を更新する', async () => {
@@ -382,9 +513,7 @@ it('参加者を非表示にすると、ヒートマップの人数も選択対�
   fireEvent.click(summary);
   const participantButton = await within(panel).findByRole('button', { name: '参加者' });
   fireEvent.click(participantButton);
-  expect(screen.getByTestId(`day-results-${ids[0]}`)).toHaveAccessibleName(
-    /○0人、△0人、×0人、未回答0人/,
-  );
+  expect(screen.getByTestId(`day-results-${ids[0]}`)).toHaveAccessibleName(/回答なし、未回答0人/);
   expect(screen.getByText('表示0人 / 参加者1人')).toBeInTheDocument();
 });
 it('△からは全枠が被覆される候補だけを提案し、明示採用・保存するまで正式回答にしない', async () => {
@@ -426,6 +555,7 @@ it('競合時は入力を保持し、最新確認後も未編集コメントを�
   fireEvent.click(within(modal).getByRole('button', { name: '最新内容を踏まえて編集を続ける' }));
   expect(screen.getByTestId(`day-${ids[0]}-yes`)).toHaveAttribute('aria-pressed', 'true');
   fireEvent.click(screen.getByTestId('date-first-answer-review'));
+  continuePastUnanswered();
   fireEvent.click(
     within(screen.getByRole('dialog', { name: '回答を保存する' })).getByRole('button', {
       name: 'この内容で保存',

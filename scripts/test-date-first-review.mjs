@@ -36,10 +36,10 @@ const call = async (db, name, values, casts) => {
 };
 const revision = async (db, e) =>
   (await db.query('SELECT revision FROM public.events WHERE id=$1', [e.id])).rows[0].revision;
-const fixture = async (db, days = ['2026-11-07', '2026-11-08']) => {
+const fixture = async (db, days = ['2026-11-07', '2026-11-08'], baseRanges) => {
   const e = await call(db, 'create_event', [
     randomUUID(),
-    JSON.stringify({ title: '隔離検証', days }),
+    JSON.stringify({ title: '隔離検証', days, ...(baseRanges && { base_ranges: baseRanges }) }),
   ]);
   e.days = (
     await db.query(
@@ -1025,6 +1025,47 @@ test('日付先行型マイグレーションの隔離DB検証', async (t) => {
         ).rows[0],
         before,
       );
+    });
+
+    await t.test('設定時間帯を日付回答の基準にし、不連続区間と翌日を区別する', async () => {
+      const e = await fixture(
+        db,
+        ['2099-02-10', '2099-02-11', '2099-02-12', '2099-02-13', '2099-02-14'],
+        [
+          [540, 600],
+          [1320, 1560],
+        ],
+      );
+      const user = await integrationUser();
+      await own(db, user, e, 'days', 0, [], randomUUID(), '時間帯判定');
+      for (const [start, end, available] of [
+        ['2099-02-10 09:00', '2099-02-10 10:00', true],
+        ['2099-02-10 12:00', '2099-02-10 13:00', false],
+        ['2099-02-10 22:00', '2099-02-11 02:00', true],
+        ['2099-02-11 09:00', '2099-02-11 10:00', true],
+        ['2099-02-11 22:00', '2099-02-12 02:00', false],
+        ['2099-02-12 09:00', '2099-02-12 10:00', false],
+        ['2099-02-12 22:00', '2099-02-13 02:00', false],
+        ['2099-02-13 09:00', '2099-02-13 10:00', false],
+        ['2099-02-14 12:00', '2099-02-14 13:00', true],
+      ])
+        await call(db, 'change_schedule', [user, start, end, available]);
+      const plan = await preview(db, user, e);
+      assert.deepEqual(
+        plan.days.map((day) => day.status),
+        ['yes', 'maybe', 'no', null, null],
+      );
+      assert.deepEqual(plan.days[1].intervals, [
+        [0, 120],
+        [540, 600],
+      ]);
+      const legacy = await fixture(db, ['2099-02-20'], []);
+      const legacyUser = await integrationUser();
+      await own(db, legacyUser, legacy, 'days', 0, [], randomUUID(), '旧時間帯');
+      await call(db, 'change_schedule', [legacyUser, '2099-02-20 10:00', '2099-02-20 22:00', true]);
+      assert.equal((await preview(db, legacyUser, legacy)).days[0].status, 'maybe');
+      await db.query('UPDATE public.events SET base_time_ranges=NULL WHERE id=$1', [legacy.id]);
+      assert.equal((await preview(db, legacyUser, legacy)).days[0].status, 'yes');
     });
 
     await t.test('I03 自動未回答化によるコメント削除は確認指紋で守る', async () => {

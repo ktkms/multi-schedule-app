@@ -614,7 +614,7 @@ LANGUAGE plpgsql STABLE SET search_path=public,pg_temp SET timezone='UTC' AS $$
 DECLARE e public.events; participant uuid; v_candidate record; v_slot record; old_day public.event_day_responses;
   coverage jsonb; extended jsonb; patch jsonb; day_changes jsonb:='[]'; time_changes jsonb:='[]';
   cleared jsonb:='[]'; state jsonb; status_value text; slot_value boolean; intervals jsonb; z jsonb;
-  lo numeric; hi numeric;
+  lo numeric; hi numeric; base_range jsonb; all_available boolean; all_unavailable boolean; any_available boolean;
 BEGIN
   SELECT * INTO STRICT e FROM public.events WHERE public_token=p_token AND scheduling_mode='date_first';
   SELECT p.id INTO participant FROM public.user_event_links l
@@ -627,10 +627,22 @@ BEGIN
     SELECT * INTO old_day FROM public.event_day_responses
       WHERE participant_id=participant AND candidate_day_id=v_candidate.id;
     IF old_day.source='manual' THEN CONTINUE; END IF;
-    coverage:=date_first.schedule_ranges(p_user,e.id,v_candidate.local_date::timestamp,v_candidate.local_date::timestamp+interval '24 hours',p_proposed);
-    status_value:=CASE WHEN (coverage->>'full_available')::boolean THEN 'yes'
-      WHEN (coverage->>'full_unavailable')::boolean THEN 'no'
-      WHEN (coverage->>'has_available')::boolean THEN 'maybe' ELSE NULL END;
+    all_available:=true; all_unavailable:=true; any_available:=false;
+    -- NULLは公開取得と同じ標準時間、旧データの空配列は従来の当日全体を基準にする。
+    FOR base_range IN SELECT value FROM jsonb_array_elements(
+      CASE WHEN e.base_time_ranges IS NULL THEN '[[600,1320]]'::jsonb
+        WHEN jsonb_array_length(e.base_time_ranges)=0 THEN '[[0,1440]]'::jsonb
+        ELSE e.base_time_ranges END) LOOP
+      coverage:=date_first.schedule_ranges(p_user,e.id,
+        v_candidate.local_date::timestamp + (base_range->>0)::integer * interval '1 minute',
+        v_candidate.local_date::timestamp + (base_range->>1)::integer * interval '1 minute',p_proposed);
+      all_available:=all_available AND (coverage->>'full_available')::boolean;
+      all_unavailable:=all_unavailable AND (coverage->>'full_unavailable')::boolean;
+      any_available:=any_available OR (coverage->>'has_available')::boolean;
+    END LOOP;
+    status_value:=CASE WHEN all_available THEN 'yes'
+      WHEN all_unavailable THEN 'no'
+      WHEN any_available THEN 'maybe' ELSE NULL END;
     intervals:='[]';
     IF status_value='maybe' THEN
       extended:=date_first.schedule_ranges(p_user,e.id,v_candidate.local_date::timestamp,v_candidate.local_date::timestamp+interval '30 hours',p_proposed);

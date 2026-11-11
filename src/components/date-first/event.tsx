@@ -27,16 +27,21 @@ function DayResults({
   token,
   dayId,
   excluded,
+  participants,
+  hasAnswers,
 }: {
   token: string;
   dayId: string;
   excluded: Set<string>;
+  participants: DateFirstEvent['participants'];
+  hasAnswers: boolean;
 }) {
-  const [details, setDetails] = useState<DayDetails | null>(null),
+  const [fetchedDetails, setDetails] = useState<DayDetails | null>(null),
     [error, setError] = useState(false),
     [retry, setRetry] = useState(0);
   const [comments, setComments] = useState<Set<string>>(new Set());
   useEffect(() => {
+    if (participants.length === 0) return;
     let active = true;
     getDateFirstDayDetails(token, dayId)
       .then((value) => {
@@ -48,81 +53,105 @@ function DayResults({
     return () => {
       active = false;
     };
-  }, [token, dayId, retry]);
-  if (error)
-    return (
-      <div className="py-3">
-        <p role="alert">回答の詳細を取得できませんでした。</p>
-        <button
-          className="btn btn-ghost btn-sm"
-          onClick={() => {
-            setError(false);
-            setRetry(retry + 1);
-          }}
-        >
-          再試行
-        </button>
-      </div>
-    );
+  }, [token, dayId, retry, participants.length]);
+  const details =
+    fetchedDetails ??
+    (hasAnswers
+      ? null
+      : participants.map((participant) => ({
+          ...participant,
+          status: null,
+          comment: null,
+          intervals: [],
+        })));
+  const failure = error && (
+    <div>
+      <p role="alert">回答の詳細を取得できませんでした。</p>
+      <button
+        type="button"
+        className="btn btn-ghost btn-sm"
+        onClick={() => {
+          setError(false);
+          setRetry(retry + 1);
+        }}
+      >
+        再試行
+      </button>
+    </div>
+  );
   if (!details)
     return (
-      <p role="status" className="py-3 text-sm">
-        回答を読み込み中…
-      </p>
+      <div className="space-y-3 py-3" aria-busy={!error}>
+        <ul className="space-y-3">
+          {participants.map((participant) => (
+            <li key={participant.id} className="ml-15 break-words font-medium">
+              {participant.name}
+            </li>
+          ))}
+        </ul>
+        {failure || (
+          <p role="status" className="text-sm">
+            回答を読み込み中…
+          </p>
+        )}
+      </div>
     );
   if (details.length === 0) return <p className="py-3 text-sm">まだ回答はありません。</p>;
   return (
-    <ul className="space-y-3 py-3">
-      {details
-        .filter((row) => !excluded.has(row.id))
-        .map((row) => (
-          <li key={row.id}>
-            <div className="flex items-start gap-3">
-              <span className="w-12 shrink-0 text-center">
-                {row.status === 'yes'
-                  ? '○'
-                  : row.status === 'maybe'
-                    ? '△'
-                    : row.status === 'no'
-                      ? '×'
-                      : '未回答'}
-              </span>
-              <div className="min-w-0 flex-1">
-                <span className="break-words font-medium">{row.name}</span>
-                {row.status === 'maybe' && row.intervals.length > 0 && (
-                  <p className="mt-1 break-words text-sm tabular-nums">
-                    {dayIntervalText(row.intervals)}
-                  </p>
+    <>
+      <ul className="space-y-3 py-3">
+        {details
+          .filter((row) => !excluded.has(row.id))
+          .map((row) => (
+            <li key={row.id}>
+              <div className="flex items-start gap-3">
+                <span className="w-12 shrink-0 text-center">
+                  {row.status === 'yes'
+                    ? '○'
+                    : row.status === 'maybe'
+                      ? '△'
+                      : row.status === 'no'
+                        ? '×'
+                        : '未回答'}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <span className="break-words font-medium">{row.name}</span>
+                  {row.status === 'maybe' && row.intervals.length > 0 && (
+                    <p className="mt-1 break-words text-sm tabular-nums">
+                      {dayIntervalText(row.intervals)}
+                    </p>
+                  )}
+                </div>
+                {row.comment && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-square shrink-0"
+                    aria-label={`${row.name}さんのコメント`}
+                    aria-expanded={comments.has(row.id)}
+                    onClick={() =>
+                      setComments((old) => {
+                        const next = new Set(old);
+                        if (next.has(row.id)) next.delete(row.id);
+                        else next.add(row.id);
+                        return next;
+                      })
+                    }
+                  >
+                    <span className="relative inline-flex" aria-hidden="true">
+                      <MessageSquare size={20} />
+                      <span className="bg-primary absolute -right-0.5 -top-0.5 size-1.5 rounded-full" />
+                    </span>
+                  </button>
                 )}
               </div>
-              {row.comment && (
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-square shrink-0"
-                  aria-label={`${row.name}さんのコメント`}
-                  aria-expanded={comments.has(row.id)}
-                  onClick={() =>
-                    setComments((old) => {
-                      const next = new Set(old);
-                      if (next.has(row.id)) next.delete(row.id);
-                      else next.add(row.id);
-                      return next;
-                    })
-                  }
-                >
-                  <span className="relative inline-flex" aria-hidden="true">
-                    <MessageSquare size={20} />
-                    <span className="bg-primary absolute -right-0.5 -top-0.5 size-1.5 rounded-full" />
-                  </span>
-                </button>
+              {comments.has(row.id) && (
+                <p className="ml-15 mt-2 whitespace-pre-wrap break-words text-sm">{row.comment}</p>
               )}
-            </div>
-            {comments.has(row.id) && (
-              <p className="ml-15 mt-2 whitespace-pre-wrap break-words text-sm">{row.comment}</p>
-            )}
-          </li>
-        ))}
-    </ul>
+            </li>
+          ))}
+      </ul>
+      {failure}
+    </>
   );
 }
 
@@ -457,10 +486,12 @@ export default function DateFirstEventView({
                 <span>未回答{inspectedDay.unanswered}</span>
               </p>
               <DayResults
-                key={inspectedDay.id}
+                key={`${inspectedDay.id}:${inspectedDay.yes + inspectedDay.maybe + inspectedDay.no > 0}`}
                 token={token}
                 dayId={inspectedDay.id}
                 excluded={excluded}
+                participants={visibleParticipants}
+                hasAnswers={inspectedDay.yes + inspectedDay.maybe + inspectedDay.no > 0}
               />
             </div>,
             document.body,

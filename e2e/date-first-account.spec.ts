@@ -105,7 +105,7 @@ test('本人リンク・予定反映の削除確認・正式時間回答の予�
     expect(await readDay()).toMatchObject([{ status: 'maybe', source: 'account' }]);
     await page.goto(`/event/${event.token}/input?participant_id=${participant}&kind=days`);
     await expect(page.getByRole('dialog', { name: '予定を取り込みますか？' })).toHaveCount(0);
-    const day = page.getByTestId(`day-answer-${days[1].id}`);
+    const day = page.locator(`[data-testid="day-answer-${days[1].id}"]:visible`);
     await expect(day.getByTestId(`day-${days[1].id}-maybe`)).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -114,6 +114,10 @@ test('本人リンク・予定反映の削除確認・正式時間回答の予�
     await day.getByRole('textbox').fill('自動回答のコメント');
     await page.getByLabel(/利用規約/).check();
     await page.getByTestId('date-first-answer-review').click();
+    await page
+      .getByRole('dialog', { name: '未回答の日があります' })
+      .getByRole('button', { name: 'このまま確認' })
+      .click();
     await page
       .getByRole('dialog')
       .getByRole('button', { name: 'この内容で保存', exact: true })

@@ -50,18 +50,25 @@ export default function DateFirstDayHeatmap({
         >
           <ChevronLeft size={20} aria-hidden="true" />
         </button>
-        <select
-          className="select w-auto"
-          aria-label="回答を表示する月"
-          value={month}
-          onChange={(event) => setSelectedMonth(event.target.value)}
-        >
-          {months.map((value) => (
-            <option key={value} value={value}>
-              {monthLabel(value)}
-            </option>
-          ))}
-        </select>
+        <div className="flex flex-col items-center gap-1">
+          <select
+            className="select w-auto"
+            aria-label="回答を表示する月"
+            value={month}
+            onChange={(event) => setSelectedMonth(event.target.value)}
+          >
+            {months.map((value) => (
+              <option key={value} value={value}>
+                {monthLabel(value)}
+              </option>
+            ))}
+          </select>
+          {months.length > 1 && (
+            <span className="text-base-content/65 text-xs">
+              候補月 {index + 1} / {months.length}
+            </span>
+          )}
+        </div>
         <button
           type="button"
           className="btn btn-ghost btn-square"
@@ -93,6 +100,7 @@ export default function DateFirstDayHeatmap({
             );
           const level =
             participantCount > 0 ? Math.min(5, Math.ceil((day.yes / participantCount) * 5)) : 0;
+          const hasAnswer = day.yes + day.maybe + day.no > 0;
           return (
             <button
               key={day.id}
@@ -100,7 +108,7 @@ export default function DateFirstDayHeatmap({
               data-testid={`day-results-${day.id}`}
               data-day-inspect={day.id}
               className={`focus-visible:outline-primary text-base-content flex min-h-16 min-w-0 cursor-pointer flex-col items-center gap-0.5 rounded-sm px-0.5 py-1 ${colors[level]}`}
-              aria-label={`${candidateDayLabel(date)} ○${day.yes}人、△${day.maybe}人、×${day.no}人、未回答${day.unanswered}人${day.confirmed ? '、確定済み' : ''}${day.hasComment ? '、コメントあり' : ''}`}
+              aria-label={`${candidateDayLabel(date)} ${hasAnswer ? `○${day.yes}人、△${day.maybe}人、×${day.no}人` : '回答なし'}、未回答${day.unanswered}人${day.confirmed ? '、確定済み' : ''}${day.hasComment ? '、コメントあり' : ''}`}
               aria-haspopup="dialog"
               aria-expanded={activeDayId === day.id}
               aria-controls={activeDayId === day.id ? 'date-first-day-detail' : undefined}
@@ -114,7 +122,7 @@ export default function DateFirstDayHeatmap({
                 {i + 1}
                 {day.confirmed && <Check size={14} className="shrink-0" aria-hidden="true" />}
               </span>
-              <span className="text-sm font-semibold tabular-nums">○{day.yes}</span>
+              {hasAnswer && <span className="text-sm font-semibold tabular-nums">○{day.yes}</span>}
               <span className="flex min-h-4 flex-wrap items-center justify-center gap-x-0.5 text-[11px] tabular-nums">
                 {day.maybe > 0 && <span>△{day.maybe}</span>}
                 {day.hasComment && (
