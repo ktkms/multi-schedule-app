@@ -5,6 +5,8 @@ import Breadcrumbs from '@/components/layout/Breadcrumbs';
 import FinalizeEventPage from '@/components/event-client/finalize-event-page';
 import { EventNotFoundError } from '@/lib/errors';
 import siteConfig from '@/lib/site-config';
+import { readDateFirstEvent } from '@/lib/date-first-service';
+import { DateFirstFinalization } from '@/components/date-first/manage';
 import {
   getAvailabilities,
   getEvent,
@@ -62,6 +64,15 @@ export default async function FinalizeRoutePage({ params }: FinalizeRoutePagePro
     throw error;
   }
 
+  if (event.scheduling_mode === 'date_first') {
+    const data = await readDateFirstEvent(publicId);
+    if (!data) notFound();
+    return (
+      <div className="app-page-narrow">
+        <DateFirstFinalization data={data} />
+      </div>
+    );
+  }
   const [eventDates, participants, availabilities, finalizedDateIds] = await Promise.all([
     getEventDates(event.id),
     getParticipants(event.id),

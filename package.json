@@ -29,7 +29,9 @@
     "e2e:headless": "npm run build && npm run start & npx playwright test --reporter=dot",
     "e2e:ci": "npm run e2e:headless",
     "format": "prettier --write .",
-    "test:db:data-api": "node --test scripts/test-data-api-access.mjs"
+    "test:db:data-api": "node --test scripts/test-data-api-access.mjs",
+    "test:db:date-first": "node --test scripts/test-date-first-review.mjs",
+    "test:db:date-first:mcp": "node scripts/test-date-first-mcp.mjs"
   },
   "dependencies": {
     "@auth/pg-adapter": "^1.11.3",

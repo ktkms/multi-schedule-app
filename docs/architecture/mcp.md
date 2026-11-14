@@ -1,5 +1,7 @@
 # DaySynthのMCP接続
 
+> 日付先行型では、既存8ツールを初回から新方式へ対応させる設計とする。本文の旧boolean回答をそのまま新方式へ適用せず、日付回答・三値の詳細回答・手動保護・方式別の入出力は[機能仕様](../../specifications/date-first-scheduling.md)と[技術設計](date-first-scheduling.md)を参照する。新方式は未実装。
+
 イベント検索・予定取得の詳細は[検索・予定取得仕様](../../specifications/mcp-search-feature.md)を参照する。
 
 ## 実装範囲

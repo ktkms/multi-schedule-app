@@ -9,6 +9,9 @@ import { deferEventLastAccessedTouch } from '@/lib/event-page-lifecycle';
 import { EventNotFoundError } from '@/lib/errors';
 import { getUserScheduleContext } from '@/lib/schedule-actions';
 import { getAuthSession } from '@/lib/auth';
+import { readDateFirstEvent, readDateFirstAnswer } from '@/lib/date-first-service';
+import { getDateFirstScheduleDraft } from '@/lib/date-first-actions';
+import DateFirstAnswerEditor from '@/components/date-first/answer';
 
 export async function generateMetadata({
   params,
@@ -48,12 +51,12 @@ export async function generateMetadata({
 
 type EventPageProps = {
   params: Promise<{ public_id: string }>;
-  searchParams: Promise<{ participant_id?: string }>;
+  searchParams: Promise<{ participant_id?: string; kind?: string }>;
 };
 
 export default async function EventPage({ params, searchParams }: EventPageProps) {
   const { public_id } = await params;
-  const { participant_id: participantId } = await searchParams;
+  const { participant_id: participantId, kind } = await searchParams;
 
   let event;
   try {
@@ -67,6 +70,25 @@ export default async function EventPage({ params, searchParams }: EventPageProps
     throw err;
   }
 
+  if (event.scheduling_mode === 'date_first') {
+    const [data, answer, schedule] = await Promise.all([
+      readDateFirstEvent(public_id),
+      participantId ? readDateFirstAnswer(public_id, participantId) : Promise.resolve(null),
+      getDateFirstScheduleDraft(public_id, participantId),
+    ]);
+    if (!data || (participantId && !answer)) notFound();
+    return (
+      <div className="app-page-narrow">
+        <DateFirstAnswerEditor
+          key={JSON.stringify([public_id, participantId, kind])}
+          data={data}
+          initialAnswer={answer}
+          kind={kind === 'times' ? 'times' : 'days'}
+          scheduleDraft={schedule.success ? schedule.draft : undefined}
+        />
+      </div>
+    );
+  }
   const sessionPromise = getAuthSession();
   const eventDatesPromise = getEventDates(event.id);
   const participantPromise = participantId

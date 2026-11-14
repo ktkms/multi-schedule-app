@@ -1,5 +1,7 @@
 # **複数日程調整アプリ プロジェクト仕様書**
 
+> 日付先行型の追加仕様は[日付先行型の日程調整](date-first-scheduling.md)、実装設計は[技術設計](../docs/architecture/date-first-scheduling.md)を参照する。新方式は実装前レビュー段階。本文の既存日時先行型の仕様と区別する。
+
 # **1. プロジェクト概要と目的（AI 駆動の開発方針）**
 
 **プロジェクト概要:** 主催者が提示した複数の候補日程に対し、参加者が都合を回答することで、最適な日程を決定する Web アプリケーション。Next.js と Supabase で個人開発する。
@@ -14,7 +16,7 @@
 - Tailwind CSS, DaisyUI (UI)
 - Supabase (PostgreSQL, 認証, ストレージ, RLS)
 
-原則として DB 操作は Next.js サーバー経由で行うが、RLS を有効化し、万一のフロントエンドからの直接アクセスにも備える。
+DBの読み書きはNext.jsサーバー経由で行う。RLSを有効化し、匿名・認証済みDBロールからの直接アクセスは権限で拒否する。[アクセス方針](../docs/architecture/access-policy.md)を参照。
 
 # **2. ユーザー種別とフロー**
 
@@ -197,9 +199,9 @@ RLS を有効化。匿名キー(anon)は RLS と組み合わせ、サービス�
 
 **RLS ポリシー方針 (現行):**
 
-- **events / event_dates / participants / availabilities:** 匿名ユーザーによる SELECT を許可。
+- **events / event_dates / participants / availabilities / finalized_dates:** RLSを有効化し、匿名・認証済みDBロールからの直接アクセスを拒否。公開URLでの閲覧はNext.jsサーバー経由で提供する。
 - **書き込み操作:** サーバー側で service_role キーを利用する運用を継続。
-  - ただし、RLSは最終防衛ラインとして機能するため、必要に応じて追加の制限を検討する。
+  - service_roleはRLSを迂回するため、対象イベントの検証はサーバー境界で行う。DBロールの権限とWeb利用者の操作権限を区別する。
 
 **補足:** `admin_token` は生成・保存のみ行い、現時点では権限判定には使用しない（将来拡張の予約領域）。
 

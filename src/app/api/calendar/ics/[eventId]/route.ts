@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseClient } from '@/lib/supabase';
 import { formatIcsDate } from '@/lib/utils';
+import { dateFirstCalendarResponse } from '@/lib/date-first-calendar-response';
 
 export async function GET(
   request: NextRequest,
@@ -17,7 +18,7 @@ export async function GET(
     // イベント情報を取得
     const { data: event, error: eventError } = await supabase
       .from('events')
-      .select('id, title, description, is_finalized')
+      .select('id, title, description, is_finalized, public_token, scheduling_mode')
       .eq('id', eventId)
       .single();
 
@@ -27,6 +28,8 @@ export async function GET(
       });
     }
 
+    if (event.scheduling_mode === 'date_first')
+      return await dateFirstCalendarResponse(request, event.id, event.public_token, false);
     // 確定した日程の情報を取得（複数日程対応）
     // まずfinalized_datesテーブルから確定した日程IDを取得
     const { data: finalizedDates, error: finalizedError } = await supabase

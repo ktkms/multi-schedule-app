@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192" role="img" aria-label="日付を調整：月間カレンダーで複数の日を選択">
+<title>日付を調整：月間カレンダーで複数の日を選択</title>
+<defs><clipPath id="calendar-clip"><rect x="15" y="24" width="162" height="152" rx="20"/></clipPath></defs>
+<rect x="15" y="24" width="162" height="152" rx="20" fill="#FFFFFF"/>
+<g clip-path="url(#calendar-clip)"><rect x="15" y="24" width="162" height="38" fill="#5037E6"/></g>
+<rect x="15" y="24" width="162" height="152" rx="20" fill="none" stroke="#4427C7" stroke-width="3.4"/>
+<path d="M49 15 V36 M143 15 V36" fill="none" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round"/>
+<path d="M49 15 V30 M143 15 V30" fill="none" stroke="#4427C7" stroke-width="6" stroke-linecap="round"/>
+<rect x="24.40" y="70.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="44.85" y="70.40" width="16.7" height="14.9" rx="3.8" fill="#5037E6"/>
+<rect x="65.30" y="70.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="85.75" y="70.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="106.20" y="70.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="126.65" y="70.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="147.10" y="70.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="24.40" y="89.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="44.85" y="89.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="65.30" y="89.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="85.75" y="89.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="106.20" y="89.40" width="16.7" height="14.9" rx="3.8" fill="#5037E6"/>
+<rect x="126.65" y="89.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="147.10" y="89.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="24.40" y="108.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="44.85" y="108.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="65.30" y="108.40" width="16.7" height="14.9" rx="3.8" fill="#5037E6"/>
+<rect x="85.75" y="108.40" width="16.7" height="14.9" rx="3.8" fill="#5037E6"/>
+<rect x="106.20" y="108.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="126.65" y="108.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="147.10" y="108.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="24.40" y="127.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="44.85" y="127.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="65.30" y="127.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="85.75" y="127.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="106.20" y="127.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="126.65" y="127.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="147.10" y="127.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="24.40" y="146.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="44.85" y="146.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="65.30" y="146.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="85.75" y="146.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="106.20" y="146.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+<rect x="126.65" y="146.40" width="16.7" height="14.9" rx="3.8" fill="#5037E6"/>
+<rect x="147.10" y="146.40" width="16.7" height="14.9" rx="3.8" fill="#DED7FC"/>
+</svg>

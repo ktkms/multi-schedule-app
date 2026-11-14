@@ -8,6 +8,8 @@ interface ExistingAnswerMenuProps {
   eventPublicToken: string;
   linkedParticipantId: string | null;
   participants: { id: string; name: string }[];
+  /** 日付先行型の詳細時間を編集する場合だけ指定する。 */
+  answerKind?: 'times';
 }
 
 /**
@@ -21,7 +23,9 @@ export default function ExistingAnswerMenu({
   eventPublicToken,
   linkedParticipantId,
   participants,
+  answerKind,
 }: ExistingAnswerMenuProps) {
+  const answerSuffix = answerKind === 'times' ? '&kind=times' : '';
   const [isOpen, setIsOpen] = useState(false);
   const menuId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -131,7 +135,7 @@ export default function ExistingAnswerMenu({
             <li role="none">
               <Link
                 role="menuitem"
-                href={`/event/${eventPublicToken}/input?participant_id=${linkedParticipantId}`}
+                href={`/event/${eventPublicToken}/input?participant_id=${linkedParticipantId}${answerSuffix}`}
                 onClick={() => setIsOpen(false)}
               >
                 自分の回答を編集
@@ -142,7 +146,7 @@ export default function ExistingAnswerMenu({
             <li key={participant.id} role="none">
               <Link
                 role="menuitem"
-                href={`/event/${eventPublicToken}/input?participant_id=${participant.id}`}
+                href={`/event/${eventPublicToken}/input?participant_id=${participant.id}${answerSuffix}`}
                 onClick={() => setIsOpen(false)}
               >
                 {participant.name}

@@ -12,15 +12,17 @@ type TermsCheckboxProps = {
 export default function TermsCheckbox({
   isChecked,
   onChange,
-  id = 'terms-checkbox',
+  id,
   disabled = false,
 }: TermsCheckboxProps) {
+  const generatedId = React.useId();
+  const inputId = id ?? generatedId;
   return (
     <div className={styles.control}>
-      <label className={styles.label} htmlFor={id}>
+      <label className={styles.label} htmlFor={inputId}>
         <input
           type="checkbox"
-          id={id}
+          id={inputId}
           className={styles.checkbox}
           checked={isChecked}
           onChange={(e) => onChange(e.target.checked)}
