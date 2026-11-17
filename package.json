@@ -75,7 +75,7 @@
     "prettier-plugin-tailwindcss": "^0.8.1",
     "supabase": "^2.122.0",
     "tailwindcss": "^4",
-    "typescript": "^5",
+    "typescript": "^7",
     "wait-on": "^9.5.1",
     "web-streams-polyfill": "^4.3.0"
   },
