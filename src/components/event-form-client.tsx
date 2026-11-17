@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState, useTransition } from 'reac
 import { format } from 'date-fns';
 import { createEvent, type CreateEventActionResult } from '@/lib/actions';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import DateRangePicker, { DateRangeSettings } from './date-range-picker';
 import ManualTimeSlotPicker from './manual-time-slot-picker';
 import { TimeSlot, addEventToHistory, EVENT_HISTORY_SYNC_MAX_ITEMS } from '@/lib/utils';
@@ -25,8 +26,8 @@ const isCreateEventSuccess = (
 ): payload is CreateEventSuccess => Boolean(payload && payload.success);
 
 const inputModeLabel = (mode: InputMode) => {
-  if (mode === 'auto') return '自動で作成';
-  if (mode === 'manual') return '手動で選択';
+  if (mode === 'auto') return 'まとめて作成';
+  if (mode === 'manual') return '選んで作成';
   return '未選択';
 };
 
@@ -521,7 +522,7 @@ export default function EventFormClient() {
               />
               <div className="p-5">
                 <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-lg font-semibold">自動で作成</h3>
+                  <h3 className="text-lg font-semibold">まとめて作成</h3>
                   <span
                     className={`h-3 w-3 rounded-full border ${
                       inputMode === 'auto' ? 'border-primary bg-primary' : 'border-base-300'
@@ -529,12 +530,20 @@ export default function EventFormClient() {
                     aria-hidden
                   />
                 </div>
-                <p className="text-base-content/70 mt-2 text-sm">
-                  期間と時間帯を入力すると候補枠を自動生成します。
-                </p>
+                <div className="mt-3 flex items-center gap-4">
+                  <Image
+                    src="/images/daysynth-create-all.svg"
+                    alt=""
+                    width={112}
+                    height={91}
+                    className="w-24 shrink-0 sm:w-28"
+                  />
+                  <p className="text-base-content/70 text-sm">
+                    指定した期間と時間帯の枠を、すべて候補にします。
+                  </p>
+                </div>
                 <div className="text-base-content/60 mt-4 grid gap-2 text-xs">
-                  <p>まとめて候補枠を作りたい場合に向いています。</p>
-                  <p>期間内の時間枠を一括生成できます。</p>
+                  <p>幅広い日時から、参加者の都合を調整したいとき。</p>
                 </div>
               </div>
             </label>
@@ -556,7 +565,7 @@ export default function EventFormClient() {
               />
               <div className="p-5">
                 <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-lg font-semibold">手動で選択</h3>
+                  <h3 className="text-lg font-semibold">選んで作成</h3>
                   <span
                     className={`h-3 w-3 rounded-full border ${
                       inputMode === 'manual' ? 'border-primary bg-primary' : 'border-base-300'
@@ -564,12 +573,20 @@ export default function EventFormClient() {
                     aria-hidden
                   />
                 </div>
-                <p className="text-base-content/70 mt-2 text-sm">
-                  カレンダー表で候補枠を直接選びます。
-                </p>
+                <div className="mt-3 flex items-center gap-4">
+                  <Image
+                    src="/images/daysynth-create-select.svg"
+                    alt=""
+                    width={112}
+                    height={91}
+                    className="w-24 shrink-0 sm:w-28"
+                  />
+                  <p className="text-base-content/70 text-sm">
+                    日時の表から、必要な時間枠だけを候補にします。
+                  </p>
+                </div>
                 <div className="text-base-content/60 mt-4 grid gap-2 text-xs">
-                  <p>候補枠を細かく調整したい場合に向いています。</p>
-                  <p>表をドラッグして柔軟に選択できます。</p>
+                  <p>候補の日時がある程度決まっているとき。</p>
                 </div>
               </div>
             </label>

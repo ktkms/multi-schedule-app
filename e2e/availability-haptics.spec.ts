@@ -36,7 +36,7 @@ test.describe.serial('回答入力のドラッグと触覚 E2E', () => {
   test('イベント作成', async ({ page, browserName }) => {
     test.skip(browserName !== 'chromium', '触覚検証は chromium で実行する');
 
-    await gotoWithRetry(page, '/create');
+    await gotoWithRetry(page, '/create?mode=time');
     await page.waitForLoadState('networkidle');
     await page.getByLabel('イベントタイトル').fill('E2Eドラッグ触覚イベント');
     await page.getByTestId('event-description-input').fill('ドラッグ入力と触覚確認用');

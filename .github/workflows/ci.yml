@@ -43,9 +43,22 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      date-first-postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: daysynth_date_first_review
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 55440:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d daysynth_date_first_review"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       CI: true
       DATA_API_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55439/data_api_security_test
+      DATE_FIRST_REVIEW_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55440/daysynth_date_first_review
       MCP_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55438/mcp_test
       SUPABASE_URL: http://127.0.0.1:54321
       SUPABASE_ANON_KEY: test-anon-key
@@ -68,6 +81,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:db:data-api
+      - run: npm run test:db:date-first
+      - run: npm run test:db:date-first:mcp
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run test:ci

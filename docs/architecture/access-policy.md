@@ -1,7 +1,7 @@
 # アクセス権限・閲覧方針
 
 作成日: 2026-01-25
-最終確認日: 2026-08-13
+最終確認日: 2026-11-02
 作成者: Codex（GPT-5）
 
 ## 背景
@@ -18,10 +18,10 @@
 
 ## 影響範囲
 
-- イベント確定などの操作は「権限チェック無し」で実行される前提となる。
-- RLSは「匿名ユーザーによるSELECTを許可」する現行方針を継続する。
+- イベント確定などで主催者・参加者の権限差は設けない。公開URLで解決したイベントと操作対象の所属・入力はサーバー境界で検証する。
+- Webのログイン不要の利用と、DBのanonロールによる直接アクセスを区別する。RLSを有効化し、PUBLIC・anon・authenticatedの直接アクセス権限は制限する。
 - `finalized_dates` を含む書き込みは、クライアント直接ではなくサーバー側の `service_role` 運用で実行する。
-- DBスキーマの変更は行わず、`admin_token` カラムは維持する。
+- `admin_token` カラムは既存互換の予約領域として維持する。
 
 ## セキュリティ・運用上の注意
 
@@ -30,11 +30,16 @@
 - 2026-08-13の判断により、権限分離・管理リンク・organizer capabilityは改善対象外とする。
 - 速度・UX改善では本方針を変更せず、入力検証、濫用制限、冪等性、監視を強化する。
 
-## RLS 運用メモ
+## DBアクセスと共同編集
 
-- `events` / `event_dates` / `participants` / `availabilities` / `finalized_dates` は公開閲覧（SELECT）を許可する。
-- 日程確定・回答保存などの書き込みは、Server Actions / RPC を通じてサーバー側で行う。
-- 2026-04-20 時点で `finalized_dates` の広い書き込みポリシーは撤廃し、読み取り中心の方針へ揃えている。
+- DBの読み書きはServer Actions / Route Handlersなどのサーバー境界を経由する。ブラウザからSupabaseへ直接接続しない。
+- `events` / `event_dates` / `participants` / `availabilities` / `finalized_dates`を含むDB直接アクセスは、`20261029000000_restrict_direct_data_api_access.sql`でPUBLIC・anon・authenticatedの権限を撤回する構成へ移行している。
+- サーバー内ではservice_roleを使う。RLSを迂回するため、RLSだけで公開URLの操作範囲を守れるとは扱わない。
+- 通常のWebでは、共有URLを知る利用者が既存参加者を選んで回答を共同編集できる。participant IDは編集対象であり、本人認証の証明ではない。
+- MCPはOAuthと本人の紐付けを検証する。Webの共同編集の許容をMCPの権限へ拡張しない。
+- 今回は文書・既存マイグレーションとの照合であり、現在の本番DB権限を再検証したものではない。
+
+移行手順・権限検証は[Data API権限制限](supabase-data-api-security-20261029.md)、日付先行型の確定仕様と未確定境界は[機能仕様](../../specifications/date-first-scheduling.md)を参照する。
 
 ## TODO
 

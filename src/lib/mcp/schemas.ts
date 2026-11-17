@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { dayChangeSchema, revisionSchema } from '@/lib/date-first-schema';
 
 export const eventInput = z
   .object({
@@ -9,7 +10,7 @@ export const eventInput = z
       .regex(/^[A-Za-z0-9-]+$/),
   })
   .strict();
-export const answerInput = eventInput
+export const legacyAnswerInput = eventInput
   .extend({
     use_account_schedule: z.boolean().optional(),
     name: z.string().trim().min(1).max(100),
@@ -30,6 +31,80 @@ export const answerInput = eventInput
     '候補日時が重複しています',
   );
 
+const newAnswerFields = {
+  public_token: eventInput.shape.public_token,
+  scheduling_mode: z.literal('date_first'),
+  expected_revision: revisionSchema,
+  request_id: z.uuid().optional(),
+  name: z
+    .string()
+    .transform((value) => value.trim())
+    .refine((value) => Array.from(value).length >= 1 && Array.from(value).length <= 100)
+    .optional(),
+  use_account_schedule: z.boolean().optional(),
+};
+export const dateFirstAnswerInput = z
+  .discriminatedUnion('answer_kind', [
+    z
+      .object({
+        ...newAnswerFields,
+        answer_kind: z.literal('days'),
+        day_changes: z.array(dayChangeSchema).max(90),
+      })
+      .strict(),
+    z
+      .object({
+        ...newAnswerFields,
+        answer_kind: z.literal('times'),
+        time_changes: z
+          .array(z.object({ id: z.uuid(), availability: z.boolean().nullable() }).strict())
+          .max(1000),
+      })
+      .strict(),
+  ])
+  .superRefine((input, context) => {
+    const rows = input.answer_kind === 'days' ? input.day_changes : input.time_changes;
+    if (new Set(rows.map((row) => row.id)).size !== rows.length)
+      context.addIssue({ code: 'custom', message: '同じ候補を重複指定できません' });
+    if (
+      input.request_id
+        ? !input.name || input.expected_revision !== '0'
+        : input.name !== undefined || input.use_account_schedule === true
+    )
+      context.addIssue({
+        code: 'custom',
+        message:
+          '初回はrequest_id・name・expected_revision=0を指定し、既存回答はrevisionと差分だけを指定してください',
+      });
+  });
+// MCPのツール定義はobjectのまま保ち、方式ごとの厳密な契約を実行前に検証する。
+export const answerInput = z
+  .object({
+    public_token: eventInput.shape.public_token,
+    name: z.string().optional(),
+    comment: z.string().nullable().optional(),
+    availabilities: legacyAnswerInput.shape.availabilities.optional(),
+    use_account_schedule: z.boolean().optional(),
+    scheduling_mode: z.literal('date_first').optional(),
+    answer_kind: z.enum(['days', 'times']).optional(),
+    expected_revision: revisionSchema.optional(),
+    request_id: z.uuid().optional(),
+    day_changes: z.array(dayChangeSchema).max(90).optional(),
+    time_changes: z
+      .array(z.object({ id: z.uuid(), availability: z.boolean().nullable() }).strict())
+      .max(1000)
+      .optional(),
+  })
+  .strict()
+  .superRefine((input, context) => {
+    const result = (
+      input.scheduling_mode === 'date_first' ? dateFirstAnswerInput : legacyAnswerInput
+    ).safeParse(input);
+    if (!result.success)
+      for (const issue of result.error.issues)
+        context.addIssue({ code: 'custom', message: issue.message, path: issue.path });
+  });
+
 // DaySynthの保存形式に合わせ、日本時間の壁時計時刻で指定する。
 const localHour = z
   .string()
@@ -45,6 +120,22 @@ export const scheduleInput = z
     end_time: localHour,
     availability: z.boolean(),
     allow_finalized: z.boolean().default(false),
+    confirmed_events: z
+      .array(
+        z
+          .object({
+            public_token: eventInput.shape.public_token,
+            expected_revision: z.string().regex(/^[a-f0-9]{64}$/),
+            acknowledged_day_ids: z
+              .array(z.uuid())
+              .max(90)
+              .refine((ids) => new Set(ids).size === ids.length),
+          })
+          .strict(),
+      )
+      .max(1000)
+      .refine((events) => new Set(events.map((event) => event.public_token)).size === events.length)
+      .optional(),
   })
   .strict()
   .refine((input) => {

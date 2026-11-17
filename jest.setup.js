@@ -42,7 +42,7 @@ if (!process.env.GOOGLE_CLIENT_SECRET) {
   process.env.GOOGLE_CLIENT_SECRET = 'test-client-secret';
 }
 // PointerEvent ポリフィル
-if (typeof global.PointerEvent === 'undefined') {
+if (typeof global.PointerEvent === 'undefined' && typeof MouseEvent !== 'undefined') {
   class PointerEventPolyfill extends MouseEvent {
     constructor(type, params = {}) {
       super(type, params);

@@ -426,7 +426,7 @@ test.describe('アカウント連携管理E2E @auth-required', () => {
       await verifyTable('dated-schedule-table');
       if (width === 320 || width === 640)
         await page.screenshot({ path: testInfo.outputPath(`dated-${width}.png`) });
-      await page.getByTestId('sync-check-button').click();
+      await page.locator('[data-testid="sync-check-button"]:visible').click();
       await verifyTable('sync-schedule-table');
       if (width === 320 || width === 640)
         await page.screenshot({ path: testInfo.outputPath(`account-${width}.png`) });
