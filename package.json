@@ -34,9 +34,9 @@
   "dependencies": {
     "@auth/pg-adapter": "^1.11.3",
     "@modelcontextprotocol/sdk": "1.32.2",
-    "@supabase/supabase-js": "^2.119.0",
+    "@supabase/supabase-js": "^2.119.2",
     "@types/uuid": "^10.0.0",
-    "daisyui": "^5.8.0",
+    "daisyui": "^5.8.1",
     "date-fns": "^4.4.0",
     "date-fns-tz": "^3.2.0",
     "dayjs": "^1.11.23",
