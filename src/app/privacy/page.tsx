@@ -1,3 +1,4 @@
+import { BRAND_OG_IMAGE } from '@/lib/og-metadata';
 import siteConfig from '@/lib/site-config';
 import { Metadata } from 'next';
 
@@ -10,13 +11,7 @@ export const metadata: Metadata = {
     title: `プライバシーポリシー | ${siteConfig.name.full}`,
     description: `${siteConfig.name.full}のプライバシーポリシーです。`,
     url: `${siteConfig.url}/privacy`,
-    images: [
-      {
-        url: siteConfig.ogImage,
-        width: 1200,
-        height: 630,
-      },
-    ],
+    images: [BRAND_OG_IMAGE],
   },
 };
 

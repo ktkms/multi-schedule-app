@@ -1,3 +1,4 @@
+import { getEventOgImage } from '@/lib/og-metadata';
 import { getEvent } from '@/lib/actions';
 import { getEventDates } from '@/lib/actions';
 import { getParticipants } from '@/lib/actions';
@@ -81,13 +82,7 @@ export async function generateMetadata({
       title,
       description,
       url: `${siteConfig.url}/event/${public_id}`,
-      images: [
-        {
-          url: `/api/og?type=event&title=${encodeURIComponent(eventTitle)}`,
-          width: 1200,
-          height: 630,
-        },
-      ],
+      images: [getEventOgImage(eventTitle)],
     },
   };
 }
