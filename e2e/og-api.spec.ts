@@ -38,4 +38,22 @@ test.describe('OG画像API', () => {
     const buf = await res.body();
     expect(buf.byteLength).toBeGreaterThan(1000);
   });
+
+  test('英語の単語間スペースが画像に反映される', async ({ request }) => {
+    const spaced = await request.get('/api/og?type=event&title=Team%20Alpha%20Kickoff%20Planning');
+    const joined = await request.get('/api/og?type=event&title=TeamAlphaKickoffPlanning');
+    expect(spaced.ok()).toBe(true);
+    expect(joined.ok()).toBe(true);
+    expect((await spaced.body()).equals(await joined.body())).toBe(false);
+  });
+
+  test('長いタイトルと絵文字の省略境界でも1200×630のPNGを返す', async ({ request }) => {
+    for (const title of ['W'.repeat(100), '日'.repeat(48) + '👨‍👩‍👧‍👦夏合宿', '']) {
+      const res = await request.get('/api/og?type=event&title=' + encodeURIComponent(title));
+      expect(res.ok()).toBe(true);
+      expect(res.headers()['content-type']).toBe('image/png');
+      const png = await res.body();
+      expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([1200, 630]);
+    }
+  });
 });

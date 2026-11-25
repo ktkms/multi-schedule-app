@@ -133,7 +133,8 @@ function isAlphaNumeric(char: string) {
  */
 function getVisualLength(text: string) {
   return Array.from(text).reduce((sum, char) => {
-    if (isAlphaNumeric(char)) return sum + 0.58;
+    if (/[MWmw]/.test(char)) return sum + 0.95;
+    if (isAlphaNumeric(char)) return sum + 0.65;
     if (/^[\u{1F300}-\u{1FAFF}]$/u.test(char)) return sum + 1.15;
     if (/^[\s・×!！?？.,、。:：|｜/／_-]$/.test(char)) return sum + 0.45;
     return sum + 1;
@@ -172,6 +173,8 @@ function isAwkwardBreak(text: string, index: number) {
   return false;
 }
 
+const graphemeSegmenter = new Intl.Segmenter('ja', { granularity: 'grapheme' });
+
 /**
  * 日本語タイトルを語単位に分割する
  *
@@ -181,7 +184,16 @@ function isAwkwardBreak(text: string, index: number) {
 function segmentJapaneseTitle(text: string) {
   if (typeof Intl !== 'undefined' && 'Segmenter' in Intl) {
     const segmenter = new Intl.Segmenter('ja', { granularity: 'word' });
-    return [...segmenter.segment(text)].map((segment) => segment.segment.trim()).filter(Boolean);
+    return Array.from(segmenter.segment(text), ({ segment }) => segment).flatMap((token) => {
+      if (getVisualLength(token) <= 12) return [token];
+
+      // 長い識別子など、語の途中以外に改行できない場合だけ分割候補を作る。
+      const segments = Array.from(graphemeSegmenter.segment(token), ({ segment }) => segment);
+      const chunkLength = Math.ceil(segments.length / Math.ceil(getVisualLength(token) / 12));
+      return segments.flatMap((_, index) =>
+        index % chunkLength === 0 ? [segments.slice(index, index + chunkLength).join('')] : [],
+      );
+    });
   }
 
   return Array.from(text);
@@ -237,6 +249,7 @@ function scoreTokenBreak(tokens: string[], tokenIndex: number) {
   const afterText = tokens.slice(tokenIndex).join('');
   const highPriorityBefore = ['、', '・', '/', '／', '|', '｜', ':', '：', '-'];
 
+  if (before === ' ') return 25;
   if (afterText === '日程調整' || afterText === '候補日調整') return 44;
   if (particles.includes(before) && (after === '日程調整' || after === '候補日調整')) return 40;
   if (particles.includes(before)) return 24;
@@ -291,7 +304,7 @@ function splitTitleIntoLineCount(text: string, lineCount: number) {
   if (lineCount <= 1) return [text];
 
   const tokens = mergeCompoundTokens(segmentJapaneseTitle(text));
-  if (tokens.length <= lineCount) return tokens;
+  if (tokens.length <= lineCount) return tokens.map((token) => token.trim()).filter(Boolean);
 
   const length = text.length;
   const idealLineLength = length / lineCount;
@@ -304,7 +317,7 @@ function splitTitleIntoLineCount(text: string, lineCount: number) {
     const remainingLines = lineCount - lines.length;
 
     if (remainingLines === 1) {
-      const lastLine = tokens.slice(startToken).join('');
+      const lastLine = tokens.slice(startToken).join('').trim();
       const candidate = [...lines, lastLine].filter(Boolean);
       const lineLengths = candidate.map((line) => line.length);
       const longest = Math.max(...lineLengths);
@@ -330,7 +343,7 @@ function splitTitleIntoLineCount(text: string, lineCount: number) {
     if (remainingTokenCount < remainingLines) return;
 
     for (let endToken = minEndToken; endToken <= maxEndToken; endToken += 1) {
-      const line = tokens.slice(startToken, endToken).join('');
+      const line = tokens.slice(startToken, endToken).join('').trim();
       if (!line) continue;
 
       const nextLineMinLength = tokens[endToken]?.length ?? 0;
@@ -400,7 +413,8 @@ function splitTitleIntoLineCount(text: string, lineCount: number) {
  */
 function truncateTitleForOg(text: string, maxLength: number) {
   if (text.length <= maxLength) return { text, truncated: false };
-  return { text: `${text.slice(0, maxLength - 1)}…`, truncated: true };
+  const boundary = graphemeSegmenter.segment(text).containing(maxLength - 1);
+  return { text: `${text.slice(0, boundary?.index ?? maxLength - 1).trimEnd()}…`, truncated: true };
 }
 
 /**
@@ -438,19 +452,26 @@ function formatEventTitle(rawTitle: string) {
   const fixedSuffixLines = !truncated ? splitCommonEventSuffix(text, lineCount) : null;
   const lines = fixedSuffixLines ?? splitTitleIntoLineCount(text, lineCount);
   const longestLineLength = Math.max(...lines.map((line) => line.length));
+  const widestLine = Math.max(...lines.map(getVisualLength));
+  // 背景のロゴに文字が重ならない幅に収める。
+  const maxFontSize = Math.floor(760 / widestLine);
 
   if (lines.length === 1) {
     const visualLineLength = getVisualLength(lines[0] ?? '');
-    const fontSize = visualLineLength <= 6 ? 98 : 88;
+    const fontSize = Math.min(visualLineLength <= 6 ? 98 : 88, maxFontSize);
     return { lines, fontSize, lineHeight: 1.04 };
   }
   if (lines.length === 2) {
-    return { lines, fontSize: longestLineLength <= 13 ? 78 : 74, lineHeight: 1.08 };
+    return {
+      lines,
+      fontSize: Math.min(longestLineLength <= 13 ? 78 : 74, maxFontSize),
+      lineHeight: 1.08,
+    };
   }
   if (lines.length === 3) {
-    return { lines, fontSize: truncated ? 56 : 58, lineHeight: 1.1 };
+    return { lines, fontSize: Math.min(truncated ? 56 : 58, maxFontSize), lineHeight: 1.1 };
   }
-  return { lines, fontSize: 44, lineHeight: 1.08 };
+  return { lines, fontSize: Math.min(44, maxFontSize), lineHeight: 1.08 };
 }
 
 /**
