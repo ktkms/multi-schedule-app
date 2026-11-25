@@ -6,17 +6,26 @@ export const eventInput = z
       .string()
       .min(10)
       .max(64)
-      .regex(/^[A-Za-z0-9-]+$/),
+      .regex(/^[A-Za-z0-9-]+$/)
+      .describe('共有URLの/event/以下の公開トークン。URL全体やイベントのDB IDではない。'),
   })
   .strict();
 export const answerInput = eventInput
   .extend({
-    use_account_schedule: z.boolean().optional(),
-    name: z.string().trim().min(1).max(100),
-    comment: z.string().max(2000).nullable().optional(),
+    use_account_schedule: z.boolean().optional().describe('初回回答のみ、登録済み予定から補完する。省略枠の不明は不可。'),
+    name: z.string().trim().min(1).max(100).describe('回答者の表示名。既存回答の編集では取得した名前を保持する。'),
+    comment: z.string().max(2000).nullable().optional().describe('回答コメント。省略は既存値保持、nullは削除。'),
     availabilities: z
-      .array(z.object({ event_date_id: z.uuid(), availability: z.boolean() }).strict())
-      .max(1000),
+      .array(
+        z
+          .object({
+            event_date_id: z.uuid().describe('get_eventのdatesに含まれる候補日時ID。'),
+            availability: z.boolean().describe('true=参加可、false=参加不可。'),
+          })
+          .strict(),
+      )
+      .max(1000)
+      .describe('初回は省略枠が不可（予定補完を除く）。既存編集は変更枠のみ。'),
   })
   .strict()
   .refine(
@@ -41,10 +50,10 @@ const localHour = z
 
 export const scheduleInput = z
   .object({
-    start_time: localHour,
-    end_time: localHour,
-    availability: z.boolean(),
-    allow_finalized: z.boolean().default(false),
+    start_time: localHour.describe('日本時間の開始時刻。YYYY-MM-DDTHH:00:00。'),
+    end_time: localHour.describe('日本時間の終了時刻（排他的）。開始から最大7日。'),
+    availability: z.boolean().describe('true=参加可、false=参加不可。'),
+    allow_finalized: z.boolean().default(false).describe('確定済みイベントの回答への反映を明示的に許可する場合のみtrue。'),
   })
   .strict()
   .refine((input) => {
@@ -58,7 +67,10 @@ const calendarDate = z.iso
     (value) => value >= '0001-01-01' && value < '9999-12-31',
     '翌日まで表現できる実在する日付を指定してください',
   );
-const periodFields = { date_from: calendarDate.optional(), date_to: calendarDate.optional() };
+const periodFields = {
+  date_from: calendarDate.optional().describe('日本時間の開始日。date_toとセット。'),
+  date_to: calendarDate.optional().describe('日本時間の終了日（当日を含む）。date_fromとセット。'),
+};
 const validPeriod = (input: { date_from?: string; date_to?: string }) =>
   Boolean(input.date_from) === Boolean(input.date_to) &&
   (!input.date_from || !input.date_to || input.date_from <= input.date_to);
@@ -66,11 +78,14 @@ const validPeriod = (input: { date_from?: string; date_to?: string }) =>
 export const eventSearchInput = z
   .object({
     ...periodFields,
-    date_target: z.enum(['effective', 'candidate', 'finalized']).optional(),
-    query: z.string().trim().min(1).max(100).optional(),
-    is_finalized: z.boolean().optional(),
-    offset: z.number().int().min(0).max(100000).default(0),
-    limit: z.number().int().min(1).max(100).default(100),
+    date_target: z
+      .enum(['effective', 'candidate', 'finalized'])
+      .optional()
+      .describe('期間指定時のみ。effective=未確定は候補、確定済みは確定日時。candidate=元の候補、finalized=確定日時のみ。'),
+    query: z.string().trim().min(1).max(100).optional().describe('イベント名の部分一致検索。'),
+    is_finalized: z.boolean().optional().describe('true=確定済み、false=未確定。省略は両方。'),
+    offset: z.number().int().min(0).max(100000).default(0).describe('続きの検索には前回のnext_offsetを指定。'),
+    limit: z.number().int().min(1).max(100).default(100).describe('1ページのイベント数。続きも同じ値。'),
   })
   .strict()
   .refine(validPeriod, '開始日と終了日を両方指定し、終了日を開始日以降にしてください')
@@ -86,8 +101,8 @@ export const eventSearchInput = z
 export const scheduleReadInput = z
   .object({
     ...periodFields,
-    week_start: calendarDate.optional(),
-    availability: z.boolean().optional(),
+    week_start: calendarDate.optional().describe('指定日から7日間。date_from/date_toと併用不可。'),
+    availability: z.boolean().optional().describe('true=登録済みの参加可、false=不可。省略は両方。'),
   })
   .strict()
   .refine(validPeriod, '開始日と終了日を両方指定し、終了日を開始日以降にしてください')
@@ -121,7 +136,7 @@ export type AnswerInput = z.infer<typeof answerInput>;
 export type ScheduleInput = z.infer<typeof scheduleInput>;
 
 export const answerReadInput = eventInput.extend({
-  include_account_schedule: z.boolean().optional(),
+  include_account_schedule: z.boolean().optional().describe('trueで候補枠ごとの個人予定の判定を取得する。保存はしない。'),
 });
 export const answerScheduleInput = eventInput
   .extend({
@@ -129,12 +144,14 @@ export const answerScheduleInput = eventInput
       .array(z.uuid())
       .min(1)
       .max(1000)
-      .refine((ids) => new Set(ids).size === ids.length, '候補日時が重複しています'),
-    mode: z.enum(['preview', 'apply']).default('preview'),
+      .refine((ids) => new Set(ids).size === ids.length, '候補日時が重複しています')
+      .describe('保存する候補日時ID。部分編集後は今回のanswered_date_idsのうち希望する枠のみ。'),
+    mode: z.enum(['preview', 'apply']).default('preview').describe('preview=差分確認、apply=確認後に保存。'),
     expected_revision: z
       .string()
       .regex(/^[a-f0-9]{64}$/)
-      .optional(),
+      .optional()
+      .describe('apply時に直前のpreview結果の値を指定する。'),
   })
   .refine(
     (input) => input.mode !== 'apply' || Boolean(input.expected_revision),
