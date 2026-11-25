@@ -4,9 +4,9 @@ test.describe('OG画像API', () => {
   test('公開ページの共有画像が正しいサイズで配信される', async ({ request }) => {
     for (const [page, image] of [
       ['/', '/og/home-v1.png'],
-      ['/create', '/og/brand-v1.png'],
-      ['/privacy', '/og/brand-v1.png'],
-      ['/terms', '/og/brand-v1.png'],
+      ['/create', '/og/brand-v2.png'],
+      ['/privacy', '/og/brand-v2.png'],
+      ['/terms', '/og/brand-v2.png'],
     ]) {
       const html = await request.get(page);
       expect(html.ok()).toBe(true);

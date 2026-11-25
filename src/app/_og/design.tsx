@@ -29,7 +29,7 @@ function getServiceDomain() {
   return siteConfig.url.replace(/^https?:\/\//, '').replace(/\/$/, '');
 }
 
-function LogoBadge({ logoUrl, size = 108 }: { logoUrl: string; size?: number }) {
+export function LogoBadge({ logoUrl, size = 108 }: { logoUrl: string; size?: number }) {
   return (
     <div
       style={{
@@ -128,7 +128,13 @@ export function LayerMark({
   );
 }
 
-export function Shell({ children }: { children: ReactNode }) {
+export function Shell({
+  children,
+  showDomain = true,
+}: {
+  children: ReactNode;
+  showDomain?: boolean;
+}) {
   return (
     <div
       style={{
@@ -155,19 +161,21 @@ export function Shell({ children }: { children: ReactNode }) {
         }}
       />
       {children}
-      <div
-        style={{
-          position: 'relative',
-          zIndex: 2,
-          display: 'flex',
-          justifyContent: 'flex-end',
-          color: palette.muted,
-          fontSize: 22,
-          fontWeight: 800,
-        }}
-      >
-        {getServiceDomain()}
-      </div>
+      {showDomain && (
+        <div
+          style={{
+            position: 'relative',
+            zIndex: 2,
+            display: 'flex',
+            justifyContent: 'flex-end',
+            color: palette.muted,
+            fontSize: 22,
+            fontWeight: 800,
+          }}
+        >
+          {getServiceDomain()}
+        </div>
+      )}
     </div>
   );
 }
