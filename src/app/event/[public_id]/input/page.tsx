@@ -1,3 +1,4 @@
+import { getEventOgImage } from '@/lib/og-metadata';
 // src/app/event/[public_id]/page.tsx
 import { getEvent, getEventDates, getParticipantById } from '@/lib/actions';
 import { notFound } from 'next/navigation';
@@ -33,15 +34,17 @@ export async function generateMetadata({
     };
   }
   const eventTitle = event.title;
+  const title = `${eventTitle}の回答 | ${siteConfig.name.full}`;
+  const description = `「${eventTitle}」の参加可能な日程を回答するページです。`;
   return {
-    title: `イベント詳細 | ${siteConfig.name.full}`,
-    description: `「${eventTitle}」の日程調整ページです。`,
+    title,
+    description,
     robots: { index: false, follow: true },
     openGraph: {
-      title: `イベント詳細 | ${siteConfig.name.full}`,
-      description: `「${eventTitle}」の日程調整ページです。`,
-      url: `${siteConfig.url}/event/${public_id}`,
-      images: [{ url: siteConfig.ogImage, width: 1200, height: 630 }],
+      title,
+      description,
+      url: `${siteConfig.url}/event/${public_id}/input`,
+      images: [getEventOgImage(eventTitle)],
     },
   };
 }

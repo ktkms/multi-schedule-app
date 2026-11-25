@@ -1,30 +1,11 @@
-/* eslint-disable @next/next/no-img-element */
 import { ImageResponse } from 'next/og';
 import { NextRequest } from 'next/server';
-import type { ReactNode } from 'react';
 import siteConfig from '../../../lib/site-config';
 
+import { LayerMark, OG_IMAGE_SIZE, palette, Shell } from '../../_og/design';
+import { HOME_OG_IMAGE } from '@/lib/og-metadata';
+
 export const runtime = 'edge';
-// タイトル等が変更できないため長期間キャッシュ
-export const revalidate = 2592000; // 30日
-
-const IMAGE_SIZE = {
-  width: 1200,
-  height: 630,
-} as const;
-
-const palette = {
-  ink: '#14213d',
-  muted: '#4f6078',
-  surface: '#f8fafc',
-  panel: '#ffffff',
-  border: 'rgba(79, 96, 120, 0.14)',
-  primary: '#4f46e5',
-  primarySoft: '#e0e7ff',
-  mint: '#14b8a6',
-  mintSoft: '#ccfbf1',
-  amber: '#f59e0b',
-} as const;
 
 /**
  * OG画像の共通レスポンスオプションを返す
@@ -33,21 +14,12 @@ const palette = {
  */
 function imageOptions(): ConstructorParameters<typeof ImageResponse>[1] {
   return {
-    ...IMAGE_SIZE,
+    ...OG_IMAGE_SIZE,
     emoji: 'twemoji',
     headers: {
       'Cache-Control': 'public, immutable, max-age=31536000',
     },
   };
-}
-
-/**
- * サービスURLから表示用ドメインを取得する
- *
- * @returns {string} プロトコルと末尾スラッシュを除いたドメイン
- */
-function getServiceDomain() {
-  return siteConfig.url.replace(/^https?:\/\//, '').replace(/\/$/, '');
 }
 
 /**
@@ -481,302 +453,93 @@ function formatEventTitle(rawTitle: string) {
   return { lines, fontSize: 44, lineHeight: 1.08 };
 }
 
-function LogoBadge({ logoUrl, size = 108 }: { logoUrl: string; size?: number }) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        width: size,
-        height: size,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: 28,
-        background: palette.panel,
-        border: `1px solid ${palette.border}`,
-        boxShadow: '0 24px 60px rgba(20, 33, 61, 0.14)',
-      }}
-    >
-      <img
-        src={logoUrl}
-        alt="DaySynthロゴ"
-        width={Math.round(size * 0.72)}
-        height={Math.round(size * 0.72)}
-        style={{ borderRadius: 20 }}
-      />
-    </div>
-  );
-}
-
-function LayerMark({
-  logoUrl,
-  scale = 1,
-  offsetX = 0,
-  offsetY = 0,
-}: {
-  logoUrl: string;
-  scale?: number;
-  offsetX?: number;
-  offsetY?: number;
-}) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        position: 'relative',
-        width: 340 * scale,
-        height: 300 * scale,
-        transform: `translate(${offsetX}px, ${offsetY}px)`,
-      }}
-    >
-      {[
-        {
-          top: 28 * scale,
-          left: 52 * scale,
-          width: 210 * scale,
-          height: 210 * scale,
-          background: palette.primarySoft,
-          opacity: 0.95,
-        },
-        {
-          top: 76 * scale,
-          left: 112 * scale,
-          width: 210 * scale,
-          height: 210 * scale,
-          background: palette.mintSoft,
-          opacity: 0.86,
-        },
-        {
-          top: 132 * scale,
-          left: 18 * scale,
-          width: 210 * scale,
-          height: 140 * scale,
-          background: 'rgba(245, 158, 11, 0.22)',
-          opacity: 0.9,
-        },
-      ].map((shape, index) => (
-        <div
-          key={index}
-          style={{
-            position: 'absolute',
-            borderRadius: 34 * scale,
-            boxShadow: '0 26px 70px rgba(20, 33, 61, 0.12)',
-            ...shape,
-          }}
-        />
-      ))}
-      <div
-        style={{
-          display: 'flex',
-          position: 'absolute',
-          top: 112 * scale,
-          left: 116 * scale,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <LogoBadge logoUrl={logoUrl} size={118 * scale} />
-      </div>
-    </div>
-  );
-}
-
-function Shell({ children }: { children: ReactNode }) {
-  return (
-    <div
-      style={{
-        width: `${IMAGE_SIZE.width}px`,
-        height: `${IMAGE_SIZE.height}px`,
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        position: 'relative',
-        overflow: 'hidden',
-        padding: '70px 84px 54px 92px',
-        fontFamily: '"Noto Sans JP", "Inter", "Segoe UI", Arial, sans-serif',
-        background: palette.surface,
-        color: palette.ink,
-      }}
-    >
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          display: 'flex',
-          background:
-            'linear-gradient(120deg, rgba(248,250,252,1) 0%, rgba(248,250,252,0.96) 58%, rgba(224,231,255,0.76) 100%)',
-        }}
-      />
-      {children}
-      <div
-        style={{
-          position: 'relative',
-          zIndex: 2,
-          display: 'flex',
-          justifyContent: 'flex-end',
-          color: palette.muted,
-          fontSize: 22,
-          fontWeight: 800,
-        }}
-      >
-        {getServiceDomain()}
-      </div>
-    </div>
-  );
-}
-
 /**
  * OG画像生成API
  *
  * @param {NextRequest} req リクエスト
- * @returns {Promise<ImageResponse> | ImageResponse} 生成したOG画像レスポンス
+ * @returns イベント画像またはトップページ用画像へのリダイレクト
  */
 export function GET(req: NextRequest) {
   const searchParams = new URL(req.url).searchParams;
   const type = searchParams.get('type');
-  const logoUrl = getAssetUrl(getBaseUrl(req), siteConfig.ogImage);
-
   if (type === 'event') {
+    const logoUrl = getAssetUrl(getBaseUrl(req), siteConfig.ogImage);
     const title = searchParams.get('title') || 'イベント';
     const { lines, fontSize, lineHeight } = formatEventTitle(title);
 
     return new ImageResponse(
-      (
-        <Shell>
-          <div
-            style={{
-              display: 'flex',
-              position: 'relative',
-              flexDirection: 'column',
-              justifyContent: 'center',
-              zIndex: 2,
-              width: 840,
-              height: 500,
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                color: palette.ink,
-              }}
-            >
-              <span style={{ color: palette.primary, fontSize: 34, fontWeight: 900 }}>
-                {siteConfig.name.full}
-              </span>
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: lines.length === 1 ? 0 : 6,
-                color: palette.ink,
-                fontSize,
-                fontWeight: 900,
-                lineHeight,
-                margin: '30px 0 24px',
-                wordBreak: 'break-word',
-              }}
-            >
-              {lines.map((line, index) => (
-                <span key={`${line}-${index}`} style={{ display: 'block', whiteSpace: 'nowrap' }}>
-                  {line}
-                </span>
-              ))}
-            </div>
-            <p
-              style={{
-                color: palette.muted,
-                fontSize: 30,
-                fontWeight: 700,
-                lineHeight: 1.36,
-                margin: 0,
-              }}
-            >
-              すぐに回答。すぐに調整。
-            </p>
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              position: 'absolute',
-              zIndex: 1,
-              right: 38,
-              top: 150,
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              opacity: 0.68,
-            }}
-          >
-            <LayerMark logoUrl={logoUrl} scale={0.82} />
-          </div>
-        </Shell>
-      ),
-      imageOptions(),
-    );
-  }
-
-  return new ImageResponse(
-    (
       <Shell>
         <div
           style={{
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            width: '100%',
-            gap: 48,
+            position: 'relative',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            zIndex: 2,
+            width: 840,
+            height: 500,
           }}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', width: 760 }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                marginBottom: 34,
-              }}
-            >
-              <span
-                style={{
-                  color: palette.primary,
-                  fontSize: 116,
-                  fontWeight: 900,
-                  lineHeight: 1,
-                }}
-              >
-                {siteConfig.name.full}
-              </span>
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 6,
-                color: palette.ink,
-                fontSize: 74,
-                fontWeight: 900,
-                lineHeight: 1.07,
-                margin: 0,
-              }}
-            >
-              <span>みんなの予定が、</span>
-              <span>すぐ決まる。</span>
-            </div>
-            <p
-              style={{
-                color: palette.muted,
-                fontSize: 31,
-                fontWeight: 700,
-                lineHeight: 1.4,
-                margin: '26px 0 0',
-              }}
-            >
-              候補を作って、リンクを送るだけ。
-            </p>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              color: palette.ink,
+            }}
+          >
+            <span style={{ color: palette.primary, fontSize: 34, fontWeight: 900 }}>
+              {siteConfig.name.full}
+            </span>
           </div>
-          <LayerMark logoUrl={logoUrl} scale={0.86} offsetX={18} offsetY={28} />
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: lines.length === 1 ? 0 : 6,
+              color: palette.ink,
+              fontSize,
+              fontWeight: 900,
+              lineHeight,
+              margin: '30px 0 24px',
+              wordBreak: 'break-word',
+            }}
+          >
+            {lines.map((line, index) => (
+              <span key={`${line}-${index}`} style={{ display: 'block', whiteSpace: 'nowrap' }}>
+                {line}
+              </span>
+            ))}
+          </div>
+          <p
+            style={{
+              color: palette.muted,
+              fontSize: 30,
+              fontWeight: 700,
+              lineHeight: 1.36,
+              margin: 0,
+            }}
+          >
+            すぐに回答。すぐに調整。
+          </p>
         </div>
-      </Shell>
-    ),
-    imageOptions(),
-  );
+        <div
+          style={{
+            display: 'flex',
+            position: 'absolute',
+            zIndex: 1,
+            right: 38,
+            top: 150,
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            opacity: 0.68,
+          }}
+        >
+          <LayerMark logoUrl={logoUrl} scale={0.82} />
+        </div>
+      </Shell>,
+      imageOptions(),
+    );
+  }
+
+  return new Response(null, { status: 307, headers: { Location: HOME_OG_IMAGE.url } });
 }

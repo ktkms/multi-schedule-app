@@ -1,3 +1,4 @@
+import { BRAND_OG_IMAGE } from '@/lib/og-metadata';
 import siteConfig from '@/lib/site-config';
 import { Metadata } from 'next';
 
@@ -8,13 +9,7 @@ export const metadata: Metadata = {
     title: `利用規約 | ${siteConfig.name.full}`,
     description: `${siteConfig.name.full}の利用規約です。本サービスを利用する前に必ずお読みください。`,
     url: `${siteConfig.url}/terms`,
-    images: [
-      {
-        url: siteConfig.ogImage,
-        width: 1200,
-        height: 630,
-      },
-    ],
+    images: [BRAND_OG_IMAGE],
   },
 };
 

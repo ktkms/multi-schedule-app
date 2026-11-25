@@ -1,3 +1,4 @@
+import { HOME_OG_IMAGE } from '@/lib/og-metadata';
 import HeroSection from '@/components/landing/hero-section';
 import LandingPage from '@/components/landing/landing-page';
 import siteConfig from '@/lib/site-config';
@@ -9,13 +10,7 @@ export const metadata = {
     title: siteConfig.share.homeTitle,
     description: siteConfig.share.homeDescription,
     url: siteConfig.url,
-    images: [
-      {
-        url: '/api/og?type=home',
-        width: 1200,
-        height: 630,
-      },
-    ],
+    images: [HOME_OG_IMAGE],
   },
 };
 
