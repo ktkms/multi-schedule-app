@@ -4,10 +4,7 @@ export const dynamic = 'force-static';
 
 export function GET() {
   return renderBrandOgImage(
-    <>
-      <span>みんなの予定が、</span>
-      <span>すぐ決まる。</span>
-    </>,
+    ['みんなの予定が、', 'すぐ決まる。'],
     '候補を作って、リンクを送るだけ。',
   );
 }

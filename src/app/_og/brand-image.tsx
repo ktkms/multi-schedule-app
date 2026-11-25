@@ -1,12 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ImageResponse } from 'next/og';
-import type { ReactNode } from 'react';
 import siteConfig from '@/lib/site-config';
 import { LayerMark, OG_IMAGE_SIZE, palette, Shell } from './design';
 
 /** デプロイ時に共有画像を生成する。ロゴはビルドに含まれるファイルを使う。 */
-export async function renderBrandOgImage(headline?: ReactNode, description?: string) {
+export async function renderBrandOgImage(headline?: string[], description?: string) {
   const logo = await readFile(join(process.cwd(), 'public', siteConfig.ogImage));
   const logoUrl = 'data:image/png;base64,' + logo.toString('base64');
   return new ImageResponse(
@@ -52,7 +51,9 @@ export async function renderBrandOgImage(headline?: ReactNode, description?: str
                 margin: 0,
               }}
             >
-              {headline}
+              {headline.map((line) => (
+                <span key={line}>{line}</span>
+              ))}
             </div>
           )}
           {description && (
