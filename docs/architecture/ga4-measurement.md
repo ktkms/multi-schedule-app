@@ -11,20 +11,20 @@ DaySynth の公開フローで、利用者がどの段階まで進み、どの�
 初期化時と App Router のパス遷移時に、次の安全なコンテキストを明示して `page_view` を送る。`send_page_view: false` を指定し、ブラウザ履歴の自動ページビューとの二重計測を避ける。
 
 - `page_path` と `page_location` はクエリを除外する。
-- `/event/<公開トークン>` と許可された子パスは `/event/[public_id]` として送る。公開トークン、`participant_id`、その他のクエリは送らない。
+- イベント URL の公開トークンは `[public_id]` に置き換え、`/input` など許可した子パスを維持する。公開トークンや `participant_id` などのクエリパラメータは送らない。
 - 既知の静的ルートだけをそのまま送る。allowlist 外のパスは `/unknown` に固定するため、404 などの任意パスも送らない。
 - `page_title` は固定された画面名の allowlist から生成する。初期 inline config では安全な固定値 `DaySynth` を使う。
 - 同一オリジンの `page_referrer` はサニタイズ済みの画面パスへ置き換え、外部リファラーはオリジンだけにする。値がない、または不正な場合は明示的に空文字を送る。
 - カスタムイベントにも同じページコンテキストを付け、自由な URL、タイトル、入力値をパラメータとして受け付けない。
 
-GA4 管理画面の Enhanced measurement は、カレンダー URL に日付やタイトルが含まれる場合の送信を防ぐため、リリース前に次を無効化する。
+カレンダー URL に含まれ得る日付やタイトルの送信と、ページビューの二重計測を避けるため、GA4 の拡張計測で次の項目を無効にする。
 
-- ページビュー（ブラウザ履歴イベントを含む）
+- ブラウザ履歴の変更に基づくページビュー
 - 離脱クリック
 - サイト内検索
 - フォーム操作
 
-これらはアプリ側の allowlist イベントと手動 `page_view` で必要な集計を行う。Enhanced measurement の設定変更は、本番コードをリリースする前に行い、二重計測がないことを DebugView と Realtime で確認する。
+必要な集計にはアプリが送る allowlist イベントと手動の `page_view` を使う。タグ読み込み時の自動 `page_view` は、アプリの `send_page_view: false` で抑止する。
 
 ## イベント契約
 
@@ -90,27 +90,30 @@ NextAuth の `events.signIn` で `account.provider === 'google'` の成功時だ
 - 開始から完了までの平均経過時間は、GA4 のファネル探索で「経過時間を表示」を有効にして確認する。放置や再訪の時間も含むため、操作に要した時間そのものとは扱わない。
 - `weekly_used` で曜日一括入力の利用を、`answer_edited` で送信済み回答の編集成功回数を確認する。入力中の戻る回数や変更回数は現状のイベントからは分からない。
 - ページ表示の性能、Server Action の待ち時間、失敗理由は現在のイベントでは計測していない。今回は追加イベントや計測 SDK を導入せず、既存イベントの分析から始める。
-- 上記は計測コードの対応範囲であり、本番での受信や GA4 の設定完了を保証するものではない。
 
 参考: [GA4 ファネル探索](https://support.google.com/analytics/answer/9327974?hl=ja)
 
 GA4 は匿名ブラウザを含む利用者の到達段階、操作成功、共有方式などのファネル分析に使う。リロードや再試行、ブラウザ設定による欠測があり得るため、`event_created` の件数を DB 上のイベント成立件数として扱わない。確定イベントのユニーク件数、回答者数、候補日の成立件数、保存の整合性は既存 DB を基準に集計する。確定のキーイベントもユニークイベント数ではない。
 
-## ロールアウトと確認
+## 本番設定
 
-2026-09-04 時点ではこの実装は本番へ未公開で、GA4 の Enhanced measurement（ページビュー履歴、離脱クリック、サイト内検索、フォーム操作）も未変更である。カスタム定義の `input_mode`、`interval_unit`、`auth_state`、`step`、`weekly_used`、`has_existing_finalization` と `selection_count` は登録済み。`event_created` と `answer_submitted` は各1回・金額なしのキーイベントとして登録し、開始から完了までの2段階ファネルを保存済み。`event_finalized` のキーイベントは、`has_existing_finalization=no` の開始条件が受信できておらず、条件設定を保留している。
+2026-11-26 に、公開サイト `https://daysynth.k-tkms.com/` の測定 ID と GA4 の既存ウェブストリームの測定 ID が一致し、作成・回答・確定のイベントを受信していることを確認した。ストリームの登録 URL を公開サイトに合わせ、「ページビューとプライバシー」に記載した 4 項目を無効にした。イベントデータの保持期間は 14 か月に設定した。
 
-保存済みの探索リンクは次のとおり。確定ファネルは本番未公開のため `has_existing_finalization=no` の受信後に開始条件を設定する。
+本番ビルドに `NEXT_PUBLIC_GOOGLE_ANALYTICS` を設定する。プレビューやローカルの本番モードで検証するときは、本番の測定 ID を設定しない。本番の測定 ID を共有すると、その環境の計測も本番のレポートに入る。
 
-- [作成ファネル](https://analytics.google.com/analytics/web/#/analysis/a299588562p487595650/edit/k06J4OSvQk60sZA0eclwcg)
-- [回答ファネル](https://analytics.google.com/analytics/web/#/analysis/a299588562p487595650/edit/Tj6sT986Q9OtLM6zU2AGIw)
-- [確定ファネル（開始条件の設定待ち）](https://analytics.google.com/analytics/web/#/analysis/a299588562p487595650/edit/oBkfu8GITE-cAhuymthjkA)
+## 探索の見方
 
-1. 本番の `NEXT_PUBLIC_GOOGLE_ANALYTICS` に測定 ID を設定し、開発環境では無効のままにする。
-2. 本番コードを公開する前に Enhanced measurement の自動ページビュー（履歴変更を含む）、離脱クリック、サイト内検索、フォーム操作を無効化する。
-3. DebugView で初期 `page_view`、SPA 遷移、各成功イベントを確認し、URL の公開トークン、`participant_id`、イベントタイトル、候補日時、カレンダー URL が payload にないことを確認する。
-4. 作成・新規回答・編集回答・共有のキャンセル／失敗・確定保存／更新／解除・Google OAuth 成功・セッション再水和を確認する。
-5. Realtime のキーイベントと DB 集計を同じ期間で照合し、両者の意味が異なることを運用メモに残す。
+- [作成ファネル](https://analytics.google.com/analytics/web/#/analysis/a299588562p487595650/edit/k06J4OSvQk60sZA0eclwcg) の「作成ファネル」タブで作成の完了率を、「作成詳細ファネル」タブでイベント情報の入力、入力方式の選択、作成成功への到達を順に見る。
+- [回答ファネル](https://analytics.google.com/analytics/web/#/analysis/a299588562p487595650/edit/Tj6sT986Q9OtLM6zU2AGIw) の「回答ファネル」タブで新規回答の完了率を、「回答詳細ファネル」タブで参加可否の入力と回答の保存への到達を順に見る。
+- [確定ファネル](https://analytics.google.com/analytics/web/#/analysis/a299588562p487595650/edit/oBkfu8GITE-cAhuymthjkA) で、未確定の日程の確定を始めたユーザーのうち、確定に成功した割合を見る。開始条件は `finalize_started` かつ `has_existing_finalization=no`。
+
+定点観測では、同じ長さの期間で、各フローの開始ユーザー数と完了率を併せて確認する。デバイス別の傾向を見るときは、端末ごとの開始ユーザー数も確認する。キーイベント数は保存成功などの発火回数を表し、ファネルの人数は指定の順序で各ステップに到達したユーザー数を表す。作成者と回答者は別の利用者になり得るため、作成・回答・確定はそれぞれのファネルで見る。
+
+### 設定変更後の確認手順
+
+1. DebugView で初期表示とアプリ内遷移を確認し、遷移先ごとの `page_view` が 1 件であること、URL の公開トークン、`participant_id`、イベントタイトル、候補日時、カレンダー URL が送信内容に含まれないことを確認する。
+2. 計測の変更箇所に応じて、作成、新規回答、編集回答、共有の成功・キャンセル、確定の保存・更新・解除、Google OAuth の成功、既存セッションでの再読み込みを確認する。
+3. Realtime のキーイベントとデータベースの集計を同じ期間で照合するときは、各指標の定義を確認する。
 
 実装の単体テストでは、成功時の一度だけの送信、失敗・キャンセル時の無送信、新規／編集の分岐、解除／更新の分岐、パスとリファラーのサニタイズ、ログイン再水和の無送信、SPA ページビュー、スキップされたステップを検証する。
 
@@ -118,6 +121,6 @@ GA4 は匿名ブラウザを含む利用者の到達段階、操作成功、共�
 
 実装時の検証では、依存関係を `npm ci` で lock ファイルの指定に復元した後、lint（エラー・警告なし）、unit（64 suites、370 passed、1 skipped）、production build、isolated browser smoke を完了した。ブラウザスモークは Google への通信を遮断したローカル環境で、初期化、遅延ロード、SPA ページビュー、サニタイズを確認している。unknown パス、測定 ID 未設定、development 環境は unit で検証した。
 
-最新の `origin/main`（`a8bcf26`）を base にした隔離worktreeでは、再度 `npm ci` を実行し、lint（エラー・警告なし）、unit（65 suites、378 passed、1 skipped）、typecheck、production build（ダミー測定 ID と既存のローカル環境変数を使用）を完了した。isolated browser smoke は実装時の検証結果であり、最新baseでは再実施していない。
+実装時の `origin/main`（`a8bcf26`）をベースにした隔離 worktreeでは、再度 `npm ci` を実行し、lint（エラー・警告なし）、unit（65 suites、378 passed、1 skipped）、typecheck、production build（ダミー測定 ID と既存のローカル環境変数を使用）を完了した。isolated browser smoke は実装時の検証結果であり、この worktree では再実施していない。
 
-本番の Google OAuth、GA4 DebugView、Enhanced measurement の切り替えは未実施である。本番コードの公開後に、運用手順に従って実データの受信と自動計測の無効化を確認する。
+2026-11-26 の設定変更後に、本番のブラウザから送信されるリクエストを Google に到達する前に捕捉した。トップページの初期表示と作成画面への遷移で `page_view` が各 1 件、作成画面で `create_started` が 1 件だった。架空のイベント URL では、`page_view` のパスが `/event/[public_id]/input` に置き換わり、`participant_id` を含むクエリが除去された。
