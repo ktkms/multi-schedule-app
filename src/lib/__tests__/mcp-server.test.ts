@@ -165,9 +165,11 @@ describe('MCP SDKの接続と操作', () => {
       const { tools } = await client.listTools();
       expect(tools).toHaveLength(8);
       expect(tools.every((tool) => Boolean(tool.title))).toBe(true);
-      expect(tools.find((tool) => tool.name === 'get_event')?.inputSchema.properties).toMatchObject({
-        public_token: { description: expect.stringContaining('公開トークン') },
-      });
+      expect(tools.find((tool) => tool.name === 'get_event')?.inputSchema.properties).toMatchObject(
+        {
+          public_token: { description: expect.stringContaining('公開トークン') },
+        },
+      );
       const result = await client.callTool({
         name: 'get_my_answer',
         arguments: { public_token: 'AbCdEf123456' },

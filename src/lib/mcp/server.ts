@@ -133,7 +133,7 @@ export function createMcpServer(identity: { userId: string; scopes: string[] } |
     {
       title: '本人のイベント回答を保存',
       description:
-        '本人の回答を登録・編集する。回答案のみの依頼では使わない。get_eventとget_my_answerで事前確認し、参加可能な候補をすべて回答する。初回の省略枠は不可。use_account_schedule=trueは初回のみで登録済み予定から補完し、不明の省略枠は不可になる。既存編集は変更枠のみ指定し、既存名と未指定枠を保持する。comment省略は保持、nullは削除。明示した枠は手動上書きとして保護する。同名ゲスト回答を編集せず、既存ゲスト回答がある場合はWebでの紐づけを案内する。アカウント予定は変更しない。保存結果のanswered_date_idsは予定保存の対象指定に使える。',
+        '本人の回答を登録・編集する。回答案のみの依頼では使わない。get_eventとget_my_answerで事前確認し、参加可能な候補をすべて回答する。日時先行型の初回は、省略した枠が不可になる。登録済み予定を使う初回回答ではuse_account_schedule=trueとし、availabilitiesには本人が個別に可否を指定した枠だけを入れる。個別指定がなければ空配列を渡す。予定が不明な枠も省略すると不可になるため、その扱いが依頼から分からなければ保存前に本人へ確認する。明示した枠は手動回答として後の予定同期から保護される。予定補完で判定できず省略した枠はunresolved_date_idsに含まれる。既存の回答を編集するときはget_my_answerで取得した表示名をnameにそのまま指定し、変更枠だけを送る。未指定枠は保持される。commentの省略は保持、nullは削除。同名ゲスト回答を編集せず、既存ゲスト回答がある場合はWebでの紐づけを案内する。個人予定は変更しない。保存結果のanswered_date_idsは予定保存の対象指定に使える。',
       inputSchema: answerInput,
       annotations: { ...write, idempotentHint: false },
       _meta: toolSecurity('save_my_answer'),
@@ -145,7 +145,7 @@ export function createMcpServer(identity: { userId: string; scopes: string[] } |
     {
       title: '本人の回答を個人予定へ保存',
       description:
-        '本人の保存済み回答の指定枠だけを個人予定へ保存する。回答保存だけの依頼では使わない。mode=previewで差分を確認し、ユーザーが保存・上書きを希望した場合だけmode=applyと返却されたexpected_revisionを指定する。部分編集後は今回のanswered_date_idsのうち保存対象だけを渡す。初回の全回答保存は同フィールドの全枠を渡す。不可も記録する。他イベントの回答は変更しない。適用成功後は再実行せず、変更エラーなら再プレビューする。',
+        '本人の保存済み回答の指定枠だけを個人予定へ保存する。回答保存だけの依頼では使わない。mode=previewで差分を確認し、本人が保存・上書きを希望した場合だけmode=applyと直前のプレビューで返されたexpected_revisionを指定する。対象枠を変える場合は再プレビューする。直前の編集で変更した枠を反映する場合は、今回のanswered_date_idsから対象を選ぶ。日時先行型の初回回答では、answered_date_idsに未指定のまま不可になった枠も含まれる。予定へ反映する枠だけを渡し、省略により不可になった枠は、本人がその枠を不可として個人予定に登録することを希望した場合だけ含める。他イベントの回答は変更しない。適用成功後は再実行しない。回答や予定の変更による競合で適用できなかった場合は再プレビューする。',
       inputSchema: answerScheduleInput,
       annotations: { ...write, idempotentHint: false },
       _meta: toolSecurity('save_my_answer_to_schedule'),
@@ -169,7 +169,7 @@ export function createMcpServer(identity: { userId: string; scopes: string[] } |
     {
       title: '個人予定を更新しイベント回答へ反映',
       description:
-        '本人の個人予定を保存し、紐づく全イベントの未来の回答へ反映する。個別イベントの回答だけを変える場合はsave_my_answerを使う。先にpreview_my_schedule_updateで影響を確認し、ユーザーが希望する範囲で実行する。日本時間、毎正時、最大7日。手動上書きと過去回答を保持し、確定済みはallow_finalized=trueで明示された場合だけ更新する。schedule_savedとsync_complete、イベント別statusで部分失敗を区別する。部分失敗時は同じ入力で再試行できる。',
+        '本人の個人予定を保存し、紐づく全イベントの未来の回答へ反映する。個別イベントの回答だけを変える場合はsave_my_answerを使う。先にpreview_my_schedule_updateで影響範囲を示し、本人がその範囲への反映を希望した場合に同じ引数で実行する。引数を変える場合は再プレビューする。日本時間、毎正時、最大7日。手動上書きと過去回答を保持し、確定済みイベントにも反映するよう本人が明示した場合だけallow_finalized=trueを指定する。schedule_savedとsync_complete、イベント別statusで部分失敗を区別する。部分失敗時は同じ入力で再試行できる。',
       inputSchema: scheduleInput,
       annotations: write,
       _meta: toolSecurity('update_my_schedule'),
