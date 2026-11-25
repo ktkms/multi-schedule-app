@@ -351,7 +351,7 @@ export async function getParticipantById(participantId: string, eventId: string)
   );
 
   return {
-    participant,
+    participant: redactCreationRequest(participant),
     availabilityMap,
   };
 }
@@ -402,8 +402,17 @@ const fetchEventByPublicToken = async (
     throw new EventNotFoundError();
   }
 
-  return data;
+  return redactCreationRequest(data);
 };
+
+/** 作成要求の再送照合に使う内部値は、公開リンクの取得結果へ転送しない。 */
+function redactCreationRequest<T extends object>(row: T): T {
+  return {
+    ...row,
+    ...('creation_request_id' in row ? { creation_request_id: null } : {}),
+    ...('creation_payload_hash' in row ? { creation_payload_hash: null } : {}),
+  };
+}
 
 const getCachedEvent = cache(fetchEventByPublicToken);
 
@@ -463,13 +472,12 @@ export async function getParticipants(
   try {
     const query = supabase.from('participants').select('*').eq('event_id', eventId);
 
-    return await fetchAllPaginatedWithOrder<Database['public']['Tables']['participants']['Row']>(
-      query as unknown as SupabaseQueryInterface,
-      'created_at',
-      {
-        ascending: true,
-      },
-    );
+    const participants = await fetchAllPaginatedWithOrder<
+      Database['public']['Tables']['participants']['Row']
+    >(query as unknown as SupabaseQueryInterface, 'created_at', {
+      ascending: true,
+    });
+    return participants.map(redactCreationRequest);
   } catch (error) {
     console.error('参加者一覧取得エラー:', error);
     return [];

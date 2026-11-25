@@ -25,12 +25,14 @@ describeDatabase('MCP読み取りのPostgreSQL回帰テスト', () => {
     pool = new Pool({ connectionString: databaseUrl });
     (authPool.connect as jest.Mock).mockImplementation(() => pool.connect());
     await pool.query(`
-      DROP TABLE IF EXISTS public.user_event_links, public.finalized_dates, public.event_dates,
+      DROP TABLE IF EXISTS public.user_event_links, public.finalized_dates, public.event_dates,public.event_candidate_days,
         public.events, public.user_schedule_blocks CASCADE;
       CREATE TABLE public.events (id uuid PRIMARY KEY, title text NOT NULL, description text,
-        public_token text UNIQUE, is_finalized boolean NOT NULL DEFAULT false, final_date_id uuid);
+        public_token text UNIQUE, is_finalized boolean NOT NULL DEFAULT false, final_date_id uuid,scheduling_mode text DEFAULT 'time_first');
+      CREATE TABLE public.event_candidate_days(id uuid PRIMARY KEY,event_id uuid REFERENCES public.events,local_date date,
+        confirmed_at timestamptz,prefinal_time_target boolean DEFAULT false);
       CREATE TABLE public.event_dates (id uuid PRIMARY KEY, event_id uuid REFERENCES public.events,
-        start_time timestamp NOT NULL, end_time timestamp NOT NULL);
+        start_time timestamp NOT NULL, end_time timestamp NOT NULL,candidate_day_id uuid,retired_at timestamptz);
       CREATE TABLE public.finalized_dates (event_id uuid, event_date_id uuid);
       CREATE TABLE public.user_event_links (id uuid PRIMARY KEY, user_id text NOT NULL, event_id uuid REFERENCES public.events,
         UNIQUE(user_id, event_id));
@@ -40,7 +42,7 @@ describeDatabase('MCP読み取りのPostgreSQL回帰テスト', () => {
   });
   beforeEach(async () => {
     await pool.query(
-      'TRUNCATE user_event_links, finalized_dates, event_dates, events, user_schedule_blocks CASCADE',
+      'TRUNCATE user_event_links, finalized_dates, event_dates, event_candidate_days, events, user_schedule_blocks CASCADE',
     );
   });
   afterAll(async () => {
@@ -180,7 +182,7 @@ describeDatabase('MCP読み取りのPostgreSQL回帰テスト', () => {
       matched_dates_truncated: true,
       matched_date_target: 'candidate',
     });
-    expect(first.events[0].matched_dates).toHaveLength(3);
+    expect('matched_dates' in first.events[0] && first.events[0].matched_dates).toHaveLength(3);
     expect(first.next_offset).toBe(2);
     const last = await search({ ...args, offset: first.next_offset });
     expect(last.events.map((e) => e.public_token)).toEqual(['public-token-2']);
@@ -224,6 +226,60 @@ describeDatabase('MCP読み取りのPostgreSQL回帰テスト', () => {
     expect(
       (await readMySchedule('me', { date_from: '2026-10-12', date_to: '2026-10-12' })).blocks,
     ).toEqual([]);
+  });
+  it('日付だけの候補・確定を仮の日時へ変換せず検索する', async () => {
+    await event(1);
+    await pool.query("UPDATE public.events SET scheduling_mode='date_first' WHERE id=$1", [
+      uuid(1),
+    ]);
+    await pool.query(
+      "INSERT INTO public.event_candidate_days(id,event_id,local_date) VALUES($1,$2,'2026-10-10')",
+      [uuid(11), uuid(1)],
+    );
+    const candidate = await search();
+    expect(candidate.events).toHaveLength(1);
+    expect(candidate.events[0]).toMatchObject({
+      scheduling_mode: 'date_first',
+      finalization_kind: 'none',
+      matched_dates: [{ id: uuid(11), kind: 'day', date: '2026-10-10', confirmed: false }],
+    });
+    await pool.query('UPDATE public.events SET is_finalized=true WHERE id=$1', [uuid(1)]);
+    await pool.query('UPDATE public.event_candidate_days SET confirmed_at=now() WHERE id=$1', [
+      uuid(11),
+    ]);
+    expect((await search({ ...day, date_target: 'finalized' })).events[0]).toMatchObject({
+      finalization_kind: 'day',
+      matched_dates: [{ kind: 'day', confirmed: true }],
+    });
+    expect((await search(day, 'other')).events).toEqual([]);
+  });
+  it('日時確定は実時間で検索し、同じ親日付の時刻未定を重ねない', async () => {
+    await event(1, { finalized: true });
+    await pool.query("UPDATE public.events SET scheduling_mode='date_first' WHERE id=$1", [
+      uuid(1),
+    ]);
+    await pool.query(
+      "INSERT INTO public.event_candidate_days(id,event_id,local_date,confirmed_at) VALUES($1,$2,'2026-10-09',now()),($3,$2,'2026-10-11',now())",
+      [uuid(11), uuid(1), uuid(12)],
+    );
+    await date(101, 1, '2026-10-09 23:00', '2026-10-10 02:00', true);
+    await pool.query('UPDATE public.event_dates SET candidate_day_id=$1 WHERE id=$2', [
+      uuid(11),
+      uuid(101),
+    ]);
+    const found = await search();
+    expect(found.events[0]).toMatchObject({
+      scheduling_mode: 'date_first',
+      finalization_kind: 'mixed',
+      matched_dates: [{ id: uuid(101), kind: 'time', candidate_day_id: uuid(11) }],
+    });
+    const previous = await search({ date_from: '2026-10-09', date_to: '2026-10-09' });
+    expect('matched_dates' in previous.events[0] && previous.events[0].matched_dates).toHaveLength(
+      1,
+    );
+    expect(
+      (await search({ date_from: '2026-10-11', date_to: '2026-10-11' })).events[0],
+    ).toMatchObject({ matched_dates: [{ kind: 'day', date: '2026-10-11' }] });
   });
   it('DB取得失敗を空の結果として返さず、接続を解放する', async () => {
     const release = jest.fn();

@@ -112,7 +112,7 @@ declare global {
 
 // 直列でE2Eフローを分割
 test('手動選択した候補だけでイベントを作成する', async ({ page }) => {
-  await page.goto('/create');
+  await page.goto('/create?mode=time');
   await page.getByLabel('イベントタイトル').fill('E2E手動選択');
   await page.getByTestId('create-next').click();
   await page.getByTestId('input-mode-manual').click();
@@ -144,7 +144,7 @@ test.describe.serial('イベントE2Eフロー', () => {
   test.describe.configure({ timeout: 60_000 });
 
   test('イベント作成', async ({ page }) => {
-    await gotoWithRetry(page, '/create');
+    await gotoWithRetry(page, '/create?mode=time');
     await page.waitForLoadState('networkidle');
     await expect(page.getByLabel('イベントタイトル')).toBeVisible();
     await captureUiuxVariants(page, 'create');

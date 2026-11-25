@@ -13,12 +13,17 @@ import { loadAnswerSchedule, answerScheduleAvailability, type AnswerDate } from 
 import { readEventDates } from './read-services';
 import {
   answerInput,
+  legacyAnswerInput,
   answerScheduleInput,
   proposedScheduleBlocks,
   scheduleInput,
   type AnswerInput,
   type ScheduleInput,
 } from './schemas';
+import { saveDateFirstMcpAnswer } from './date-first';
+import { dateFirstFailure } from '@/lib/date-first-service';
+import { dateFirstAnswerSchema } from '@/lib/date-first-schema';
+import { readDateFirstUserPreviews, applyDateFirstUserPreviews } from '@/lib/date-first-sync';
 
 export class McpInputError extends Error {}
 
@@ -34,6 +39,43 @@ export async function readMyAnswer(
   includeAccountSchedule?: boolean,
 ) {
   const event = await readEvent(publicToken);
+  if (event.scheduling_mode === 'date_first') {
+    const db = await authPool.connect();
+    try {
+      const result = await db.query<{ participant_id: string | null }>(
+        'SELECT participant_id FROM public.user_event_links WHERE user_id=$1 AND event_id=$2',
+        [userId, event.id],
+      );
+      const participant = result.rows[0]?.participant_id;
+      const answer = participant
+        ? dateFirstAnswerSchema.parse(
+            (
+              await db.query<{ value: unknown }>('SELECT date_first.read_answer($1,$2) AS value', [
+                publicToken,
+                participant,
+              ])
+            ).rows[0].value,
+          )
+        : null;
+      const preview = includeAccountSchedule
+        ? (
+            await db.query<{ value: unknown }>(
+              "SELECT date_first.sync_preview($1,$2,'[]'::jsonb,true) AS value",
+              [userId, publicToken],
+            )
+          ).rows[0].value
+        : undefined;
+      return {
+        scheduling_mode: 'date_first',
+        answer,
+        ...(includeAccountSchedule ? { account_schedule: preview } : {}),
+      };
+    } catch (error) {
+      return dateFirstFailure(error);
+    } finally {
+      db.release();
+    }
+  }
   let accountSchedule;
   if (includeAccountSchedule) {
     const db = await authPool.connect();
@@ -101,16 +143,20 @@ export async function readMyAnswer(
 
 /** 本人の紐づきをロックし、名前検索をせずに回答と紐づきを原子的に保存する。 */
 export async function saveMyAnswer(userId: string, rawInput: AnswerInput) {
-  const input = answerInput.parse(rawInput);
+  const parsed = answerInput.parse(rawInput);
+  if (parsed.scheduling_mode === 'date_first') return saveDateFirstMcpAnswer(userId, parsed);
+  const input = legacyAnswerInput.parse(parsed);
   const db = await authPool.connect();
   try {
     await db.query('BEGIN');
-    const eventResult = await db.query<{ id: string }>(
-      'SELECT id FROM public.events WHERE public_token = $1 FOR SHARE',
+    const eventResult = await db.query<{ id: string; scheduling_mode?: string }>(
+      "SELECT id,to_jsonb(events)->>'scheduling_mode' AS scheduling_mode FROM public.events WHERE public_token = $1 FOR SHARE",
       [input.public_token],
     );
     const eventId = eventResult.rows[0]?.id;
     if (!eventId) throw new McpInputError('イベントが見つかりません');
+    if (eventResult.rows[0].scheduling_mode === 'date_first')
+      throw new McpInputError('日付先行型ではscheduling_modeとanswer_kindを指定してください');
     // 未紐づけの初回回答も同一アカウントから同時に作成しない。
     await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
       `mcp-answer:${userId}:${eventId}`,
@@ -222,19 +268,37 @@ export async function saveMyAnswer(userId: string, rawInput: AnswerInput) {
 
 export async function previewMyScheduleUpdate(userId: string, rawInput: ScheduleInput) {
   const input = scheduleInput.parse(rawInput);
-  const result = await fetchUserAvailabilitySyncPreviewResult(userId, {
-    proposedBlocks: proposedScheduleBlocks(input),
-    strict: true,
-  });
+  const proposed = proposedScheduleBlocks(input);
+  const [result, dateFirst] = await Promise.all([
+    fetchUserAvailabilitySyncPreviewResult(userId, { proposedBlocks: proposed, strict: true }),
+    readDateFirstUserPreviews(userId, proposed),
+  ]);
   if (!result.success) throw new McpInputError(result.message);
+  if (dateFirst.some((event) => event.status === 'failed'))
+    throw new McpInputError('日付先行型の反映差分を取得できませんでした。予定は保存していません。');
   return {
-    events: result.events.map((event) => ({
-      public_token: event.publicToken,
-      title: event.title,
-      skipped: event.isFinalized && !input.allow_finalized,
-      changed_slots: event.changes.total - event.changes.protected,
-      protected_slots: event.changes.protected,
-    })),
+    events: [
+      ...result.events.map((event) => ({
+        public_token: event.publicToken,
+        title: event.title,
+        skipped: event.isFinalized && !input.allow_finalized,
+        changed_slots: event.changes.total - event.changes.protected,
+        protected_slots: event.changes.protected,
+      })),
+      ...dateFirst.map((event) => ({
+        public_token: event.publicToken,
+        title: event.title,
+        scheduling_mode: 'date_first',
+        skipped: event.isFinalized && !input.allow_finalized,
+        changed_days: event.changedDays,
+        changed_slots: event.changedSlots,
+        requires_confirmation: event.status === 'requires_confirmation',
+        expected_revision: event.fingerprint,
+        acknowledged_day_ids: event.clearedCommentIds,
+        days: event.days,
+        times: event.times,
+      })),
+    ],
   };
 }
 
@@ -245,16 +309,38 @@ export async function saveMyAnswerToSchedule(
 ) {
   const input = answerScheduleInput.parse(rawInput);
   const db = await authPool.connect();
+  let dateFirst = false;
   try {
     await db.query('BEGIN');
     // プレビュー検証から保存までの予定追加・回答変更も競合として検出する。
     await db.query('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE');
-    const event = await db.query<{ id: string }>(
-      'SELECT id FROM public.events WHERE public_token = $1 FOR SHARE',
+    const event = await db.query<{ id: string; scheduling_mode?: string }>(
+      "SELECT id,to_jsonb(events)->>'scheduling_mode' AS scheduling_mode FROM public.events WHERE public_token = $1 FOR SHARE",
       [input.public_token],
     );
     const eventId = event.rows[0]?.id;
     if (!eventId) throw new McpInputError('イベントが見つかりません');
+    if (event.rows[0].scheduling_mode === 'date_first') {
+      dateFirst = true;
+      await db.query("SET LOCAL lock_timeout='3s'; SET LOCAL statement_timeout='10s'");
+      const result =
+        input.mode === 'preview'
+          ? await db.query<{ value: Record<string, unknown> }>(
+              'SELECT date_first.answer_schedule_preview($1,$2,$3::uuid[]) AS value',
+              [userId, input.public_token, input.event_date_ids],
+            )
+          : await db.query<{ value: Record<string, unknown> }>(
+              'SELECT date_first.apply_answer_schedule($1,$2,$3::uuid[],$4) AS value',
+              [userId, input.public_token, input.event_date_ids, input.expected_revision],
+            );
+      await db.query('COMMIT');
+      return {
+        scheduling_mode: 'date_first',
+        saved: input.mode === 'apply',
+        other_events_updated: false,
+        ...result.rows[0].value,
+      };
+    }
     await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
       `mcp-answer:${userId}:${eventId}`,
     ]);
@@ -315,6 +401,7 @@ export async function saveMyAnswerToSchedule(
     return { saved: true, saved_slots: payload.length, other_events_updated: false };
   } catch (error) {
     await db.query('ROLLBACK');
+    if (dateFirst) return dateFirstFailure(error);
     throw error;
   } finally {
     db.release();
@@ -325,7 +412,20 @@ export async function saveMyAnswerToSchedule(
 export async function updateMySchedule(userId: string, rawInput: ScheduleInput) {
   const input = scheduleInput.parse(rawInput);
   // 不完全な取得結果で保存を始めない。
-  await previewMyScheduleUpdate(userId, input);
+  const before = await previewMyScheduleUpdate(userId, input);
+  for (const confirmation of input.confirmed_events ?? []) {
+    const event = before.events.find((event) => event.public_token === confirmation.public_token);
+    if (
+      !event ||
+      !('expected_revision' in event) ||
+      event.expected_revision !== confirmation.expected_revision ||
+      JSON.stringify([...event.acknowledged_day_ids].sort()) !==
+        JSON.stringify([...confirmation.acknowledged_day_ids].sort())
+    )
+      throw new McpInputError(
+        '確認した差分が変更されています。予定変更のプレビューを取得し直してください',
+      );
+  }
   const saved = await saveUserScheduleBlockChanges(userId, {
     upserts: [
       { startTime: input.start_time, endTime: input.end_time, availability: input.availability },
@@ -335,8 +435,13 @@ export async function updateMySchedule(userId: string, rawInput: ScheduleInput) 
   if (!saved.success) throw new McpInputError(saved.message ?? '予定を保存できませんでした');
   const events: Array<{
     public_token: string;
-    status: 'updated' | 'skipped' | 'failed';
+    status: 'updated' | 'skipped' | 'failed' | 'requires_confirmation';
     changed_slots: number;
+    changed_days?: number;
+    scheduling_mode?: string;
+    expected_revision?: string;
+    acknowledged_day_ids?: string[];
+    message?: string;
   }> = [];
   try {
     const preview = await fetchUserAvailabilitySyncPreviewResult(userId, { strict: true });
@@ -362,9 +467,14 @@ export async function updateMySchedule(userId: string, rawInput: ScheduleInput) 
         events.push({ public_token: event.publicToken, status: 'failed', changed_slots: 0 });
       }
     }
+    events.push(
+      ...(await applyDateFirstUserPreviews(userId, input.allow_finalized, input.confirmed_events)),
+    );
     return {
       schedule_saved: true,
-      sync_complete: events.every((event) => event.status !== 'failed'),
+      sync_complete: events.every(
+        (event) => event.status === 'updated' || event.status === 'skipped',
+      ),
       events,
     };
   } catch {

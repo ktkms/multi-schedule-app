@@ -224,6 +224,30 @@ docker stop daysynth-data-api-test
 
 接続先は`localhost`または`127.0.0.1`の`data_api_security_test`に限定し、既存テーブルがある場合は中断します。`pg_isready`で接続可能になってから実行してください。再実行時はコンテナを作り直してください。開発用・本番用DBは指定しないでください。Nodeで検証するため、過去の初期化SQLにあるpgTAP拡張の作成だけを省略します。権限制限マイグレーションは加工せず適用します。
 
+## 日付先行型の隔離DB設計検証
+
+Issue #257の追加マイグレーション案を、空の専用PostgreSQLへ適用して検証します。機能全体の公開準備は未完了で、本番適用用のコマンドではありません。CIではPostgreSQL 16を使用し、ローカルでは15.19でも確認しています。
+
+```bash
+docker run --rm --detach --name daysynth-date-first-review \
+  --publish 127.0.0.1:55440:5432 \
+  --env POSTGRES_DB=daysynth_date_first_review --env POSTGRES_PASSWORD=review-only postgres:15
+docker exec daysynth-date-first-review pg_isready -U postgres -d daysynth_date_first_review
+DATE_FIRST_REVIEW_DATABASE_URL=postgresql://postgres:review-only@127.0.0.1:55440/daysynth_date_first_review \
+  npm run test:db:date-first
+DATE_FIRST_REVIEW_DATABASE_URL=postgresql://postgres:review-only@127.0.0.1:55440/daysynth_date_first_review \
+  npm run test:db:date-first:mcp
+docker stop daysynth-date-first-review
+```
+
+pg_isreadyが成功してからテストを実行してください。環境変数は明示指定が必須で、localhost/127.0.0.1のdaysynth_date_first_review以外、または既存のpublicテーブルがあるDBには適用しません。.env・Supabaseのリンク先は読みません。再実行時は専用コンテナを作り直します。
+
+既存25件のマイグレーション、旧方式のテストデータ、[追加マイグレーション案](supabase/migrations/20261103060811_date_first_scheduling.sql)の順に適用します。pgTAP拡張の作成だけを省略し、追加マイグレーション案は加工しません。試作SQLを別に複製せず、実装に対応する回帰テストとして維持します。
+
+最新版はPostgreSQL 16で子テスト30件が成功し、HTTP本文境界の1件は明示的にスキップしています。Nodeの集計は親を含めてpass 31 / skip 1です。続くMCP検証は、対象DBと同じDockerネットワークに一時PostgRESTを起動し、実DB・SDK統合2件を実行して終了時に削除します。Docker CLIが必要で、通常開発用のコンテナは操作しません。[技術設計の検証結果と未完了項目](docs/architecture/date-first-scheduling.md#隔離dbでの実行結果2026-11-03)を参照してください。
+
+新方式は未公開です。専用保存サービスの新規作成はENABLE_DATE_FIRST_SCHEDULING=trueの場合だけ受理します。画面・MCP・本人予定・カレンダーは隔離環境で接続検証していますが、公開頻度制限・本番移行前確認が残るため、本番ではまだ有効化しません。追加DDLを本番へ適用する前に、技術設計の移行前確認と適用順序を確認してください。
+
 ## デプロイ方法
 
 - Vercel へのデプロイを想定しています。
