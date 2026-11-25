@@ -104,7 +104,7 @@ GA4 は匿名ブラウザを含む利用者の到達段階、操作成功、共�
 ## 探索の見方
 
 - [作成ファネル](https://analytics.google.com/analytics/web/#/analysis/a299588562p487595650/edit/k06J4OSvQk60sZA0eclwcg) の「作成ファネル」タブで作成の完了率を、「作成詳細ファネル」タブでイベント情報の入力、入力方式の選択、作成成功への到達を順に見る。
-- [回答ファネル](https://analytics.google.com/analytics/web/#/analysis/a299588562p487595650/edit/Tj6sT986Q9OtLM6zU2AGIw) の「回答ファネル」タブで新規回答の完了率を、「回答詳細ファネル」タブで参加可否の入力と回答の保存への到達を順に見る。
+- [回答ファネル](https://analytics.google.com/analytics/web/#/analysis/a299588562p487595650/edit/Tj6sT986Q9OtLM6zU2AGIw) の「回答ファネル」タブで新規回答の完了率を、「回答詳細ファネル」タブで参加可否の入力と回答の保存への到達を順に見る。同じ探索の「DaySynth 主要指標」タブでは、作成成功、新規回答の保存、日程の確定、共有のイベント数とアクティブユーザー数を日別・デバイス別に確認する。
 - [確定ファネル](https://analytics.google.com/analytics/web/#/analysis/a299588562p487595650/edit/oBkfu8GITE-cAhuymthjkA) で、未確定の日程の確定を始めたユーザーのうち、確定に成功した割合を見る。開始条件は `finalize_started` かつ `has_existing_finalization=no`。
 
 定点観測では、同じ長さの期間で、各フローの開始ユーザー数と完了率を併せて確認する。デバイス別の傾向を見るときは、端末ごとの開始ユーザー数も確認する。キーイベント数は保存成功などの発火回数を表し、ファネルの人数は指定の順序で各ステップに到達したユーザー数を表す。作成者と回答者は別の利用者になり得るため、作成・回答・確定はそれぞれのファネルで見る。
