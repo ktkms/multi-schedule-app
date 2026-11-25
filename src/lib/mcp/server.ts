@@ -101,7 +101,7 @@ export function createMcpServer(identity: { userId: string; scopes: string[] } |
     'get_my_answer',
     {
       description:
-        '本人に紐づく回答を取得する。紐づきがなければanswerはnull。日付先行型はdaysの○△×/nullと条件・コメント、timesのtrue/false/null、source、dayRevision/timeRevisionを返す。行なしとnullは未回答であり不可ではない。include_account_schedule=trueで、保存や初回登録を行わず本人予定の判定も取得する。日付○は当日0〜24時で、翌朝や正式な時間回答へコピーしない。',
+        '本人に紐づく回答を取得する。紐づきがなければanswerはnull。日付先行型はdaysの○△×/nullと条件・コメント、timesのtrue/false/null、source、dayRevision/timeRevisionを返す。日付先行型では回答行がない場合と回答値のnullは未回答。日付の○はイベントで設定した時間帯（翌日に及ぶ時間帯を含む）を通して参加可能という意味で、日付回答は正式な時間回答に自動で引き継がれない。別途保存された時間回答の有無はtimesで確認する。日時先行型の回答のfalseは不可。include_account_schedule=trueで個人予定の判定も取得する。予定判定のnullは不明。',
       inputSchema: answerReadInput,
       annotations: read,
       _meta: toolSecurity('get_my_answer'),
@@ -124,7 +124,7 @@ export function createMcpServer(identity: { userId: string; scopes: string[] } |
     'save_my_answer',
     {
       description:
-        '本人の回答を登録・編集する。日時先行型は従来どおりname/availabilitiesを指定し、省略枠の既存契約を維持する。日付先行型はscheduling_mode=date_first、answer_kind=days/times、expected_revisionを必須とし、day_changes/time_changesの差分を送る。revisionはget_my_answerの各段階の値。新規はrequest_id/nameとrevision=0、編集は名前やrequest_idを送らない。未指定・未回答を×へ変換しない。use_account_schedule=trueは初回だけで、手動値を守って予定から補完する。新規再送は同じrequest_id・内容を使う。個人予定は変更しない。',
+        '本人の回答を登録・編集する。日時先行型はnameとavailabilitiesを指定する。初回は、省略した枠が不可になる。登録済み予定を使う初回回答ではuse_account_schedule=trueとし、availabilitiesには本人が個別に可否を指定した枠だけを入れる。個別指定がなければ空配列を渡す。予定が不明な枠も省略すると不可になるため、その扱いが依頼から分からなければ保存前に本人へ確認する。明示した枠は手動回答として後の予定同期から保護される。予定補完で判定できず省略した枠はunresolved_date_idsに含まれる。既存回答の編集ではget_my_answerで取得した表示名をnameにそのまま指定し、変更枠だけを送る。日付先行型ではscheduling_mode=date_firstを指定する。日付回答はanswer_kind=daysとday_changes、詳細時間回答はanswer_kind=timesとtime_changesを送る。編集のexpected_revisionにはget_my_answerで取得したdayRevision（days）またはtimeRevision（times）を指定し、nameとrequest_idは省略する。新規作成ではrequest_id、nameとexpected_revision=0を指定する。日付先行型では未指定の回答を保持し、未回答を不可に変換しない。どちらの回答種別でも、初回に予定から補完する場合はuse_account_schedule=trueを指定し、個別指定がなければ選んだ種別の差分に空配列を渡す。新規再送は同じrequest_idと内容を使う。個人予定は変更しない。',
       inputSchema: answerInput,
       annotations: { ...write, idempotentHint: false },
       _meta: toolSecurity('save_my_answer'),
@@ -135,7 +135,7 @@ export function createMcpServer(identity: { userId: string; scopes: string[] } |
     'save_my_answer_to_schedule',
     {
       description:
-        '本人の保存済み時間回答の指定枠だけを個人予定へ保存する。mode=previewで確認し、本人が保存・上書きを希望した場合だけmode=applyとexpected_revisionを指定する。日付先行型は正式な○/×のみ対象で、日付記号・null・行なしを予定へ変換しない。端数を1時間へ拡大せず、重なる登録済み予定は選択範囲だけ更新し外側を保持する。他イベントの回答は更新しない。適用成功後は再実行せず、変更エラーなら再プレビューする。',
+        '本人の保存済み時間回答の指定枠だけを個人予定へ保存する。mode=previewで確認し、本人が保存・上書きを希望した場合だけmode=applyと直前のプレビューで返されたexpected_revisionを指定する。対象枠を変える場合は再プレビューする。日付先行型では、timesのtrueまたはfalseが保存された時間枠だけを選ぶ。日付回答や未回答の時間枠は対象外。端数を1時間へ拡大せず、重なる登録済み予定は選択範囲だけ更新し外側を保持する。日時先行型の初回回答では、answered_date_idsに未指定のまま不可になった枠も含まれる。予定へ反映する枠だけを渡し、省略により不可になった枠は、本人がその枠を不可として個人予定に登録することを希望した場合だけ含める。他イベントの回答は更新しない。適用成功後は再実行しない。回答や予定の変更による競合で適用できなかった場合は再プレビューする。',
       inputSchema: answerScheduleInput,
       annotations: { ...write, idempotentHint: false },
       _meta: toolSecurity('save_my_answer_to_schedule'),
@@ -157,7 +157,7 @@ export function createMcpServer(identity: { userId: string; scopes: string[] } |
     'update_my_schedule',
     {
       description:
-        '本人の予定を保存し、紐づく新旧イベントの未来の回答へ反映する。日本時間、毎正時、最大7日。手動上書き・手動未回答と過去回答を保持し、確定済みイベントはallow_finalized=trueの場合だけ反映する。日付先行型のコメント削除はconfirmed_eventsで確認した指紋と対象が一致する場合だけ許可する。未確認ならそのイベントを全件無変更にしrequires_confirmationを返す。予定保存と反映の部分失敗を区別し、同じ入力で再試行できる。',
+        '本人の個人予定を保存し、紐づく全イベントの未来の回答へ反映する。先にpreview_my_schedule_updateで影響範囲を示し、本人がその範囲への反映を希望した場合に同じ期間・可否・allow_finalizedで実行する。これらを変える場合は再プレビューする。日本時間、毎正時、最大7日。手動上書き・手動未回答と過去回答を保持し、確定済みイベントにも反映するよう本人が明示した場合だけallow_finalized=trueを指定する。日付先行型でコメントの削除が必要な場合は、プレビューで削除対象を本人に提示する。本人が承認したイベントだけ、プレビューのpublic_token、expected_revision、acknowledged_day_idsをconfirmed_eventsに渡す。承認がないイベントの回答は更新せず、requires_confirmationを返す。予定保存と反映の部分失敗を区別し、同じ入力で再試行できる。',
       inputSchema: scheduleInput,
       annotations: write,
       _meta: toolSecurity('update_my_schedule'),
